@@ -1,0 +1,563 @@
+{% extends 'base.html' %}
+{% block title %}Caja — Kairos Stock{% endblock %}
+{% block page_title %}Caja / Atención al Público{% endblock %}
+{% block page_subtitle %}Punto de venta{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('caja.historial_caja') }}" class="btn btn-outline btn-sm">
+    <i class="fas fa-clock-rotate-left"></i> Historial
+  </a>
+  <button class="btn btn-outline btn-sm" onclick="openModal('modalIngreso')">
+    <i class="fas fa-arrow-down" style="color:#16a34a"></i> Ingreso
+  </button>
+  <button class="btn btn-outline btn-sm" onclick="openModal('modalEgreso')">
+    <i class="fas fa-arrow-up" style="color:#ef4444"></i> Egreso
+  </button>
+{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Layout ── */
+  .caja-layout { display:grid; grid-template-columns:1fr 380px; gap:1rem; align-items:start; }
+  @media(max-width:900px){ .caja-layout{ grid-template-columns:1fr; } }
+
+  /* ── Resumen del día ── */
+  .resumen-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1rem; }
+  @media(max-width:700px){ .resumen-grid{ grid-template-columns:repeat(2,1fr); } }
+  .stat-box { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.9rem 1rem; }
+  .stat-box .stat-val { font-size:1.25rem; font-weight:700; color:var(--text); }
+  .stat-box .stat-lbl { font-size:.75rem; color:var(--text-muted); margin-top:.15rem; }
+
+  /* ── Producto grid ── */
+  .prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.6rem; }
+  .prod-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:.75rem; cursor:pointer; transition:.15s;
+    display:flex; flex-direction:column; gap:.25rem;
+  }
+  .prod-card:hover { border-color:var(--brand); box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+  .prod-card.out-of-stock { opacity:.45; cursor:not-allowed; }
+  .prod-card .prod-name { font-size:.85rem; font-weight:600; line-height:1.3; }
+  .prod-card .prod-price { font-size:.95rem; font-weight:700; color:var(--brand); }
+  .prod-card .prod-stock { font-size:.72rem; color:var(--text-muted); }
+  .prod-card .prod-sku { font-size:.7rem; color:var(--text-muted); font-family:monospace; }
+
+  /* ── Ticket ── */
+  .ticket-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; position:sticky; top:1rem; }
+  .ticket-header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .ticket-header .title { font-weight:700; font-size:.95rem; }
+  .ticket-items { min-height:180px; max-height:340px; overflow-y:auto; }
+  .ticket-item {
+    display:grid; grid-template-columns:1fr auto auto auto;
+    align-items:center; gap:.5rem;
+    padding:.6rem 1.25rem; border-bottom:1px solid var(--border); font-size:.85rem;
+  }
+  .ticket-item:last-child { border-bottom:none; }
+  .ticket-empty { padding:2.5rem; text-align:center; color:var(--text-muted); font-size:.85rem; }
+  .ticket-footer { padding:1rem 1.25rem; border-top:1px solid var(--border); }
+  .ticket-row { display:flex; justify-content:space-between; font-size:.85rem; padding:.2rem 0; color:var(--text-muted); }
+  .ticket-row.total { font-size:1.05rem; font-weight:700; color:var(--text); border-top:1px solid var(--border); margin-top:.4rem; padding-top:.6rem; }
+  .qty-btn { width:24px; height:24px; border:1px solid var(--border); background:var(--bg); border-radius:5px; cursor:pointer; font-size:.85rem; display:flex; align-items:center; justify-content:center; transition:.1s; }
+  .qty-btn:hover { border-color:var(--brand); color:var(--brand); }
+
+  /* ── IVA toggle ── */
+  .iva-toggle { display:flex; gap:.4rem; align-items:center; }
+  .iva-btn { padding:.3rem .8rem; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-size:.82rem; background:var(--bg); transition:.15s; }
+  .iva-btn.active { background:var(--brand); color:white; border-color:var(--brand); }
+
+  /* ── Scanner bar ── */
+  .scanner-bar { display:flex; gap:.5rem; margin-bottom:.75rem; }
+  .scanner-bar input { flex:1; }
+
+  /* ── Category filter ── */
+  .cat-pills { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.75rem; }
+  .cat-pill { padding:.25rem .75rem; border-radius:999px; border:1px solid var(--border); font-size:.78rem; cursor:pointer; background:var(--bg); transition:.15s; }
+  .cat-pill:hover, .cat-pill.active { background:var(--brand-bg); border-color:var(--brand); color:var(--brand); }
+
+  /* ── Payment methods ── */
+  .pay-methods { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+  .pay-btn { flex:1; min-width:80px; padding:.4rem .6rem; border:1px solid var(--border); border-radius:7px; background:var(--bg); cursor:pointer; font-size:.8rem; text-align:center; transition:.15s; }
+  .pay-btn.active { background:var(--brand); color:white; border-color:var(--brand); }
+</style>
+
+<!-- Resumen del día -->
+<div class="resumen-grid">
+  <div class="stat-box">
+    <div class="stat-val">{{ cant_ventas_hoy }}</div>
+    <div class="stat-lbl"><i class="fas fa-receipt" style="color:var(--brand)"></i> Ventas hoy</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-val" style="color:#16a34a">${{ "%.2f"|format(total_ventas_hoy) }}</div>
+    <div class="stat-lbl"><i class="fas fa-cash-register" style="color:#16a34a"></i> Total ventas</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-val" style="color:#0369a1">${{ "%.2f"|format(total_ingresos_hoy) }}</div>
+    <div class="stat-lbl"><i class="fas fa-arrow-down" style="color:#0369a1"></i> Ingresos</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-val" style="color:{{ 'var(--danger)' if saldo_caja < 0 else 'var(--text)' }}">${{ "%.2f"|format(saldo_caja) }}</div>
+    <div class="stat-lbl"><i class="fas fa-wallet"></i> Saldo caja</div>
+  </div>
+</div>
+
+<div class="caja-layout">
+  <!-- ── LEFT: Catálogo ── -->
+  <div>
+    <!-- Escáner -->
+    <div class="scanner-bar">
+      <div style="position:relative;flex:1">
+        <i class="fas fa-barcode" style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--brand)"></i>
+        <input type="text" id="scannerInput" class="form-control" placeholder="Escanear código de barras / buscar producto..." style="padding-left:2.4rem" autocomplete="off">
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('scannerInput').focus()">
+        <i class="fas fa-crosshairs"></i>
+      </button>
+    </div>
+
+    <!-- Categorías -->
+    <div class="cat-pills" id="catPills">
+      <span class="cat-pill active" data-cat="">Todos</span>
+      {% for cat in categories %}
+      <span class="cat-pill" data-cat="{{ cat.id }}" style="--cat-color:{{ cat.color }}">{{ cat.name }}</span>
+      {% endfor %}
+    </div>
+
+    <!-- Grilla de productos -->
+    <div class="prod-grid" id="prodGrid">
+      {% for p in products %}
+      <div class="prod-card {% if p.stock == 0 %}out-of-stock{% endif %}"
+           data-id="{{ p.id }}"
+           data-name="{{ p.name|e }}"
+           data-price="{{ p.price }}"
+           data-stock="{{ p.stock }}"
+           data-sku="{{ p.sku or '' }}"
+           data-cat="{{ p.category_id or '' }}"
+           onclick="addToTicket(this)">
+        <div class="prod-name">{{ p.name }}</div>
+        <div class="prod-price">${{ "%.2f"|format(p.price) }}</div>
+        <div class="prod-stock">
+          {% if p.stock == 0 %}
+            <span style="color:var(--danger)"><i class="fas fa-xmark"></i> Sin stock</span>
+          {% elif p.stock <= p.min_stock %}
+            <span style="color:#f59e0b"><i class="fas fa-triangle-exclamation"></i> {{ p.stock }} {{ p.unit }}</span>
+          {% else %}
+            <i class="fas fa-check" style="color:#16a34a"></i> {{ p.stock }} {{ p.unit }}
+          {% endif %}
+        </div>
+        {% if p.sku %}<div class="prod-sku">{{ p.sku }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Ticket ── -->
+  <div class="ticket-panel">
+    <div class="ticket-header">
+      <span class="title"><i class="fas fa-receipt" style="color:var(--brand)"></i> Ticket</span>
+      <button class="btn btn-outline btn-sm" onclick="limpiarTicket()" title="Limpiar ticket">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+
+    <!-- Items del ticket -->
+    <div class="ticket-items" id="ticketItems">
+      <div class="ticket-empty" id="ticketEmpty">
+        <i class="fas fa-cart-shopping" style="font-size:2rem;opacity:.25;display:block;margin-bottom:.5rem"></i>
+        Agregá productos al ticket
+      </div>
+    </div>
+
+    <!-- Totales + IVA -->
+    <div class="ticket-footer">
+      <!-- IVA toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <span style="font-size:.82rem;color:var(--text-muted)">IVA:</span>
+        <div class="iva-toggle">
+          <button class="iva-btn active" data-iva="0" onclick="setIva(this)">Sin IVA</button>
+          <button class="iva-btn" data-iva="21" onclick="setIva(this)">+ 21%</button>
+        </div>
+      </div>
+
+      <div class="ticket-row"><span>Subtotal</span><span id="ticketSubtotal">$0.00</span></div>
+      <div class="ticket-row" id="ticketIvaRow" style="display:none"><span>IVA (21%)</span><span id="ticketIva">$0.00</span></div>
+      <div class="ticket-row total"><span>TOTAL</span><span id="ticketTotal">$0.00</span></div>
+
+      <!-- Método de pago -->
+      <div style="margin-top:.75rem">
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.35rem">Método de pago</div>
+        <div class="pay-methods" id="payMethods">
+          <button class="pay-btn active" data-pay="efectivo"><i class="fas fa-money-bill-wave"></i><br>Efectivo</button>
+          <button class="pay-btn" data-pay="tarjeta"><i class="fas fa-credit-card"></i><br>Tarjeta</button>
+          <button class="pay-btn" data-pay="transferencia"><i class="fas fa-mobile-screen"></i><br>Transf.</button>
+        </div>
+      </div>
+
+      <!-- Notas -->
+      <textarea id="ticketNotas" class="form-control" rows="1" placeholder="Notas del ticket..." style="margin-top:.6rem;font-size:.82rem;resize:none"></textarea>
+
+      <!-- Cobrar -->
+      <button class="btn btn-primary w-100" style="margin-top:.75rem;font-size:1rem;padding:.65rem" onclick="cobrar()">
+        <i class="fas fa-check-circle"></i> Cobrar
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODAL INGRESO ── -->
+<div class="modal-backdrop" id="modalIngreso">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-arrow-down" style="color:#16a34a"></i> Ingreso de dinero</span>
+      <button class="modal-close" onclick="closeModal('modalIngreso')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Monto *</label>
+        <input type="number" id="ingresoMonto" class="form-control" placeholder="0.00" min="0.01" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="ingresoConcepto" class="form-control" placeholder="Ej: apertura de caja, cobro deuda...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalIngreso')">Cancelar</button>
+      <button class="btn btn-primary" style="background:#16a34a;border-color:#16a34a" onclick="registrarMovimiento('ingreso')">
+        <i class="fas fa-plus"></i> Registrar ingreso
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL EGRESO ── -->
+<div class="modal-backdrop" id="modalEgreso">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-arrow-up" style="color:#ef4444"></i> Egreso de dinero</span>
+      <button class="modal-close" onclick="closeModal('modalEgreso')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Monto *</label>
+        <input type="number" id="egresoMonto" class="form-control" placeholder="0.00" min="0.01" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="egresoConcepto" class="form-control" placeholder="Ej: cierre de caja, pago proveedor...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalEgreso')">Cancelar</button>
+      <button class="btn btn-danger" onclick="registrarMovimiento('egreso')">
+        <i class="fas fa-minus"></i> Registrar egreso
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL TICKET IMPRIMIBLE ── -->
+<div class="modal-backdrop" id="modalTicket">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-receipt" style="color:var(--brand)"></i> Ticket</span>
+      <button class="modal-close" onclick="closeModal('modalTicket')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="ticketPrint" style="font-family:monospace;font-size:.85rem;line-height:1.6"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalTicket')">Cerrar</button>
+      <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Imprimir</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let cart = [];       // [{id, name, price, qty, stock}]
+let ivaRate = 0;
+let payMethod = 'efectivo';
+
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── IVA toggle ────────────────────────────────────────────────────────────────
+function setIva(btn) {
+  ivaRate = parseInt(btn.dataset.iva);
+  document.querySelectorAll('.iva-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ticketIvaRow').style.display = ivaRate > 0 ? '' : 'none';
+  renderTotals();
+}
+
+// ── Payment method ────────────────────────────────────────────────────────────
+document.querySelectorAll('.pay-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    payMethod = btn.dataset.pay;
+  });
+});
+
+// ── Category filter ───────────────────────────────────────────────────────────
+document.querySelectorAll('.cat-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    const cat = pill.dataset.cat;
+    document.querySelectorAll('.prod-card').forEach(card => {
+      card.style.display = (!cat || card.dataset.cat === cat) ? '' : 'none';
+    });
+  });
+});
+
+// ── Scanner / search ──────────────────────────────────────────────────────────
+const scannerInput = document.getElementById('scannerInput');
+let searchTimer = null;
+
+scannerInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    const q = scannerInput.value.trim().toLowerCase();
+    if (!q) {
+      document.querySelectorAll('.prod-card').forEach(c => c.style.display = '');
+      return;
+    }
+    // Barcode scanner sends full SKU fast — try exact match first
+    const exact = [...document.querySelectorAll('.prod-card')]
+      .find(c => c.dataset.sku && c.dataset.sku.toLowerCase() === q);
+    if (exact) {
+      addToTicket(exact);
+      scannerInput.value = '';
+      document.querySelectorAll('.prod-card').forEach(c => c.style.display = '');
+      return;
+    }
+    // Otherwise filter grid
+    document.querySelectorAll('.prod-card').forEach(c => {
+      const match = c.dataset.name.toLowerCase().includes(q) ||
+                    (c.dataset.sku && c.dataset.sku.toLowerCase().includes(q));
+      c.style.display = match ? '' : 'none';
+    });
+  }, 200);
+});
+
+// Enter key for barcode scanner (sends Enter after code)
+scannerInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    clearTimeout(searchTimer);
+    const q = scannerInput.value.trim();
+    const exact = [...document.querySelectorAll('.prod-card')]
+      .find(c => c.dataset.sku && c.dataset.sku === q);
+    if (exact) {
+      addToTicket(exact);
+      scannerInput.value = '';
+      document.querySelectorAll('.prod-card').forEach(c => c.style.display = '');
+    }
+  }
+});
+
+// ── Add to ticket ─────────────────────────────────────────────────────────────
+function addToTicket(card) {
+  if (card.classList.contains('out-of-stock')) return;
+  const id = card.dataset.id;
+  const existing = cart.find(i => i.id === id);
+  const maxStock = parseInt(card.dataset.stock);
+  if (existing) {
+    if (existing.qty >= maxStock) {
+      showFlash('Stock máximo alcanzado para "' + existing.name + '"', 'error');
+      return;
+    }
+    existing.qty++;
+  } else {
+    cart.push({
+      id, 
+      name: card.dataset.name,
+      price: parseFloat(card.dataset.price),
+      qty: 1,
+      stock: maxStock,
+    });
+  }
+  renderTicket();
+  // Visual feedback
+  card.style.transform = 'scale(.96)';
+  setTimeout(() => card.style.transform = '', 120);
+}
+
+// ── Render ticket ─────────────────────────────────────────────────────────────
+function renderTicket() {
+  const container = document.getElementById('ticketItems');
+  const empty = document.getElementById('ticketEmpty');
+  if (cart.length === 0) {
+    container.innerHTML = '';
+    container.appendChild(empty);
+    renderTotals();
+    return;
+  }
+  container.innerHTML = cart.map((item, idx) => `
+    <div class="ticket-item">
+      <div>
+        <div style="font-weight:600;font-size:.83rem;line-height:1.3">${item.name}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">$${item.price.toFixed(2)} c/u</div>
+      </div>
+      <button class="qty-btn" onclick="changeQty(${idx}, -1)">−</button>
+      <span style="min-width:28px;text-align:center;font-weight:600">${item.qty}</span>
+      <button class="qty-btn" onclick="changeQty(${idx}, 1)">+</button>
+      <span style="min-width:60px;text-align:right;font-weight:600">$${(item.price * item.qty).toFixed(2)}</span>
+      <button class="qty-btn" onclick="removeItem(${idx})" style="color:var(--danger);border-color:var(--danger)">×</button>
+    </div>
+  `).join('');
+  renderTotals();
+}
+
+function changeQty(idx, delta) {
+  const item = cart[idx];
+  const newQty = item.qty + delta;
+  if (newQty <= 0) { removeItem(idx); return; }
+  if (newQty > item.stock) { showFlash('Stock máximo: ' + item.stock, 'error'); return; }
+  item.qty = newQty;
+  renderTicket();
+}
+
+function removeItem(idx) {
+  cart.splice(idx, 1);
+  renderTicket();
+}
+
+function limpiarTicket() {
+  if (cart.length === 0) return;
+  if (!confirm('¿Limpiar el ticket actual?')) return;
+  cart = [];
+  renderTicket();
+}
+
+function renderTotals() {
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const taxAmt = subtotal * (ivaRate / 100);
+  const total = subtotal + taxAmt;
+  document.getElementById('ticketSubtotal').textContent = '$' + subtotal.toFixed(2);
+  document.getElementById('ticketIva').textContent = '$' + taxAmt.toFixed(2);
+  document.getElementById('ticketTotal').textContent = '$' + total.toFixed(2);
+}
+
+// ── Cobrar ────────────────────────────────────────────────────────────────────
+async function cobrar() {
+  if (cart.length === 0) { showFlash('Agregá al menos un producto al ticket.', 'error'); return; }
+  const btn = document.querySelector('[onclick="cobrar()"]');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+  try {
+    const res = await fetch('/caja/venta', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        items: cart.map(i => ({
+          product_id: i.id,
+          description: i.name,
+          quantity: i.qty,
+          unit_price: i.price,
+        })),
+        tax_rate: ivaRate,
+        payment_method: payMethod,
+        notes: document.getElementById('ticketNotas').value.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showFlash(data.error || 'Error al procesar la venta.', 'error'); return; }
+
+    // Show printable ticket
+    showTicketModal(data);
+
+    // Reset
+    cart = [];
+    renderTicket();
+    document.getElementById('ticketNotas').value = '';
+
+    // Refresh stock badges on cards
+    data.items.forEach(item => {
+      // We'll just do a soft page reload of the product cards via a simple indicator
+    });
+    showFlash('Venta registrada: ' + data.ticket_number, 'success');
+
+    // Reload page stats after a short delay
+    setTimeout(() => location.reload(), 2500);
+
+  } catch(e) {
+    showFlash('Error de conexión.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check-circle"></i> Cobrar';
+  }
+}
+
+function showTicketModal(data) {
+  const lines = data.items.map(i =>
+    `${i.description.padEnd(18).substring(0,18)}  x${i.quantity}  $${i.subtotal.toFixed(2)}`
+  ).join('\n');
+  const now = new Date().toLocaleString('es-AR');
+  document.getElementById('ticketPrint').innerHTML = `
+    <pre style="margin:0;font-size:.8rem;line-height:1.7">
+================================
+        KAIROS STOCK
+================================
+Ticket: ${data.ticket_number}
+Fecha:  ${now}
+================================
+${lines}
+--------------------------------
+Subtotal:     $${data.subtotal.toFixed(2)}
+${data.tax_amount > 0 ? 'IVA 21%:      $' + data.tax_amount.toFixed(2) + '\n' : ''}TOTAL:        $${data.total.toFixed(2)}
+================================
+    ¡Gracias por su compra!
+================================
+    </pre>`;
+  openModal('modalTicket');
+}
+
+// ── Movimientos de caja ───────────────────────────────────────────────────────
+async function registrarMovimiento(tipo) {
+  const montoEl = document.getElementById(tipo + 'Monto');
+  const concEl  = document.getElementById(tipo + 'Concepto');
+  const monto   = parseFloat(montoEl.value);
+  if (!monto || monto <= 0) { showFlash('Ingresá un monto válido.', 'error'); return; }
+
+  try {
+    const res = await fetch('/caja/movimiento', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ tipo, monto, concepto: concEl.value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showFlash(data.error || 'Error.', 'error'); return; }
+
+    closeModal('modal' + (tipo === 'ingreso' ? 'Ingreso' : 'Egreso'));
+    montoEl.value = '';
+    concEl.value  = '';
+    showFlash((tipo === 'ingreso' ? 'Ingreso' : 'Egreso') + ' registrado: $' + monto.toFixed(2), 'success');
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) {
+    showFlash('Error de conexión.', 'error');
+  }
+}
+
+// ── Flash helper ──────────────────────────────────────────────────────────────
+function showFlash(msg, type) {
+  const div = document.createElement('div');
+  div.className = 'alert alert-' + type;
+  div.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;min-width:260px;animation:fadeIn .2s';
+  div.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':'exclamation-circle'}"></i> ${msg}`;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
+}
+
+// Auto-focus scanner on load
+window.addEventListener('load', () => scannerInput.focus());
+</script>
+{% endblock %}

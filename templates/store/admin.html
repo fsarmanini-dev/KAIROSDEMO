@@ -1,0 +1,464 @@
+{% extends 'base.html' %}
+{% block title %}Admin Tienda — Kairos Stock{% endblock %}
+{% block page_title %}Tienda Online{% endblock %}
+{% block page_subtitle %}Configuración y gestión de la tienda pública{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('store.store') }}" class="btn btn-success" target="_blank"><i class="fas fa-store"></i> Ver tienda</a>
+  <a href="{{ url_for('store.store_orders') }}" class="btn btn-outline"><i class="fas fa-box"></i> Pedidos</a>
+{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<style>
+  .admin-tabs { display:flex; gap:.25rem; margin-bottom:1.5rem; border-bottom:2px solid var(--border); }
+  .tab-btn { padding:.65rem 1.25rem; border:none; background:none; font-family:'Sora',sans-serif; font-size:.875rem; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
+  .tab-btn.active { color:var(--brand); border-bottom-color:var(--brand); }
+  .tab-content { display:none; } .tab-content.active { display:block; }
+  .product-store-row { display:grid; grid-template-columns:auto 1fr auto; gap:1rem; align-items:center; padding:.85rem 1rem; border-bottom:1px solid var(--border); }
+  .product-store-row:last-child { border-bottom:none; }
+  .prod-thumb { width:52px;height:52px;border-radius:8px;object-fit:cover;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.5rem;overflow:hidden;flex-shrink:0; }
+  .prod-thumb img { width:100%;height:100%;object-fit:cover; }
+  .toggle-sw { position:relative;width:38px;height:22px; }
+  .toggle-sw input { opacity:0;width:0;height:0; }
+  .tog-sl { position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:22px;transition:.3s; }
+  .tog-sl:before { position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+  .toggle-sw input:checked + .tog-sl { background:var(--success); }
+  .toggle-sw input:checked + .tog-sl:before { transform:translateX(16px); }
+  .color-preview { width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:inline-block; }
+  .badge-select { padding:.3rem .5rem;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:'Sora',sans-serif; }
+  .expand-row { background:var(--surface2);border-radius:10px;padding:1rem;margin:.5rem 0;display:none; }
+  .expand-row.open { display:grid;grid-template-columns:1fr 1fr;gap:.75rem; }
+  @media(max-width:600px){ .expand-row.open{ grid-template-columns:1fr; } }
+  .img-preview { width:100%;height:120px;border-radius:8px;object-fit:cover;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:2rem;margin-top:.4rem;overflow:hidden; }
+  .img-preview img { width:100%;height:100%;object-fit:cover; }
+  .config-grid { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
+  @media(max-width:700px){ .config-grid{grid-template-columns:1fr;} }
+  .stat-mini { background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center; }
+  .stat-mini-val { font-size:1.6rem;font-weight:700;color:var(--brand); }
+  .stat-mini-label { font-size:.75rem;color:var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- STATS -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+  <div class="stat-mini"><div class="stat-mini-val">{{ store_products|selectattr('1')|list|length }}</div><div class="stat-mini-label">En tienda</div></div>
+  <div class="stat-mini"><div class="stat-mini-val">{{ orders|length }}</div><div class="stat-mini-label">Pedidos recientes</div></div>
+  <div class="stat-mini"><div class="stat-mini-val">{{ orders|selectattr('status','eq','nuevo')|list|length }}</div><div class="stat-mini-label">Nuevos hoy</div></div>
+  <div class="stat-mini"><div class="stat-mini-val">${{ "%.0f"|format(orders|sum(attribute='total')) }}</div><div class="stat-mini-label">Total ventas</div></div>
+</div>
+
+<!-- TABS -->
+<div class="admin-tabs">
+  <button class="tab-btn active" onclick="switchTab('productos')">📦 Productos en tienda</button>
+  <button class="tab-btn" onclick="switchTab('pedidos')">🛒 Últimos pedidos</button>
+  <button class="tab-btn" onclick="switchTab('config')">⚙️ Configuración</button>
+  <button class="tab-btn" onclick="switchTab('editor')">✏️ Editor de página</button>
+</div>
+
+<!-- TAB: PRODUCTOS -->
+<div class="tab-content active" id="tab-productos">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Productos del inventario</span>
+      <span style="font-size:.8rem;color:var(--text-muted)">Activá los que querés mostrar en la tienda y configurá imágenes, colores y precios</span>
+    </div>
+    <div>
+      {% for p, si in store_products %}
+      <div class="product-store-row">
+        <div class="prod-thumb">
+          {% if si and si.image_url %}<img src="{{ si.image_url }}" alt="">
+          {% else %}🎨{% endif %}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:.9rem">{{ p.name }}</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">${{ "%.2f"|format(p.price) }} · Stock: {{ p.stock }} · {% if p.category %}{{ p.category.name }}{% else %}Sin cat.{% endif %}</div>
+          {% if si and si.visible %}
+          <span class="badge badge-success" style="font-size:.65rem;margin-top:.2rem">En tienda</span>
+          {% if si.featured %}<span class="badge badge-purple" style="font-size:.65rem;margin-left:.25rem">Destacado</span>{% endif %}
+          {% endif %}
+        </div>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <label class="toggle-sw" title="Mostrar en tienda">
+            <input type="checkbox" {% if si and si.visible %}checked{% endif %} onchange="quickToggle({{ p.id }}, this)">
+            <span class="tog-sl"></span>
+          </label>
+          <button class="btn btn-sm btn-outline" onclick="toggleExpand({{ p.id }})"><i class="fas fa-pen"></i></button>
+        </div>
+      </div>
+      <!-- Expand form -->
+      <div class="expand-row" id="expand-{{ p.id }}">
+        <form method="POST" action="{{ url_for('store.store_product_save', id=p.id) }}" id="form-{{ p.id }}">
+          <input type="hidden" name="visible" value="">
+          {% if si and si.visible %}<input type="hidden" name="visible" value="1">{% endif %}
+
+          <div class="form-group">
+            <label class="form-label">Imagen principal (URL)</label>
+            <input type="text" name="image_url" class="form-control" value="{{ si.image_url if si else '' }}" placeholder="https://..." id="img1-{{ p.id }}" oninput="previewImg('img1-{{ p.id }}','prev1-{{ p.id }}')">
+            <div class="img-preview" id="prev1-{{ p.id }}">{% if si and si.image_url %}<img src="{{ si.image_url }}">{% else %}📷{% endif %}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Imagen 2 (URL)</label>
+            <input type="text" name="image_url_2" class="form-control" value="{{ si.image_url_2 if si else '' }}" placeholder="https://..." id="img2-{{ p.id }}" oninput="previewImg('img2-{{ p.id }}','prev2-{{ p.id }}')">
+            <div class="img-preview" id="prev2-{{ p.id }}">{% if si and si.image_url_2 %}<img src="{{ si.image_url_2 }}">{% else %}📷{% endif %}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Imagen 3 (URL)</label>
+            <input type="text" name="image_url_3" class="form-control" value="{{ si.image_url_3 if si else '' }}" placeholder="https://..." id="img3-{{ p.id }}" oninput="previewImg('img3-{{ p.id }}','prev3-{{ p.id }}')">
+            <div class="img-preview" id="prev3-{{ p.id }}">{% if si and si.image_url_3 %}<img src="{{ si.image_url_3 }}">{% else %}📷{% endif %}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Precio tachado (precio original antes del descuento)</label>
+            <input type="number" name="original_price" class="form-control" step="0.01" min="0" value="{{ si.original_price if si else '' }}" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Colores disponibles (códigos hex separados por coma)</label>
+            <input type="text" name="colors" class="form-control" value="{{ si.colors if si else '' }}" placeholder="#FFFFFF, #000000, #FF5733">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">Ej para pinturas: #FFFFFF, #F5F5DC, #808080</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Presentaciones / Tamaños (separados por coma)</label>
+            <input type="text" name="sizes" class="form-control" value="{{ si.sizes if si else '' }}" placeholder="1L, 4L, 10L, 20L">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción para la tienda</label>
+            <textarea name="store_description" class="form-control" rows="2" placeholder="Descripción atractiva para el cliente...">{{ si.store_description if si else '' }}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Etiqueta (badge)</label>
+            <select name="badge" class="form-control badge-select">
+              <option value="">Sin etiqueta</option>
+              {% for b in ['Nuevo','Oferta','Top','Exclusivo','Agotándose'] %}
+              <option value="{{ b }}" {% if si and si.badge == b %}selected{% endif %}>{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Orden de aparición (número menor = aparece primero)</label>
+            <input type="number" name="sort_order" class="form-control" value="{{ si.sort_order if si else 0 }}" min="0">
+          </div>
+          <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:600;cursor:pointer">
+              <input type="checkbox" name="visible" value="1" {% if si and si.visible %}checked{% endif %}> Visible en tienda
+            </label>
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:600;cursor:pointer;margin-left:1rem">
+              <input type="checkbox" name="featured" value="1" {% if si and si.featured %}checked{% endif %}> Destacado ⭐
+            </label>
+          </div>
+        </form>
+        <div style="grid-column:1/-1;display:flex;gap:.5rem;margin-top:.5rem">
+          <button class="btn btn-primary" onclick="document.getElementById('form-{{ p.id }}').submit()"><i class="fas fa-save"></i> Guardar</button>
+          <button class="btn btn-outline" onclick="toggleExpand({{ p.id }})">Cancelar</button>
+          <a href="{{ url_for('store.store_product', id=p.id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-eye"></i> Ver en tienda</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- TAB: PEDIDOS -->
+<div class="tab-content" id="tab-pedidos">
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>N°</th><th>Cliente</th><th>Teléfono</th><th>Total</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+          {% for o in orders %}
+          <tr>
+            <td class="mono fw-600" style="color:var(--brand)">{{ o.order_number }}</td>
+            <td style="font-weight:600">{{ o.client_name }}</td>
+            <td class="text-muted" style="font-size:.82rem">{{ o.client_phone or '—' }}</td>
+            <td class="mono fw-600">${{ "%.2f"|format(o.total) }}</td>
+            <td>
+              <span class="badge {% if o.status=='confirmado' %}badge-success{% elif o.status=='cancelado' %}badge-danger{% elif o.status=='en proceso' %}badge-info{% else %}badge-warning{% endif %}">
+                {{ o.status }}
+              </span>
+            </td>
+            <td class="text-muted" style="font-size:.8rem">{{ o.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('store.update_order_status', id=o.id) }}" style="display:flex;gap:.3rem">
+                <select name="status" class="form-control" style="font-size:.78rem;padding:.3rem .5rem">
+                  {% for s in ['nuevo','en proceso','confirmado','enviado','cancelado'] %}
+                  <option value="{{ s }}" {% if o.status==s %}selected{% endif %}>{{ s }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted)"><i class="fas fa-shopping-cart" style="font-size:2rem;display:block;margin-bottom:.5rem;opacity:.3"></i>Sin pedidos aún</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: CONFIG -->
+<div class="tab-content" id="tab-config">
+  <form method="POST" action="{{ url_for('store.store_config_save') }}">
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">🏪 Datos de la tienda</span></div>
+      <div class="card-body">
+        <div class="config-grid">
+          <div class="form-group"><label class="form-label">Nombre de la tienda</label><input type="text" name="store_name" class="form-control" value="{{ cfg.store_name }}"></div>
+          <div class="form-group"><label class="form-label">Slogan</label><input type="text" name="store_slogan" class="form-control" value="{{ cfg.store_slogan }}"></div>
+          <div class="form-group"><label class="form-label">Color principal</label><input type="color" name="primary_color" class="form-control" value="{{ cfg.primary_color }}" style="height:42px;padding:.25rem"></div>
+          <div class="form-group"><label class="form-label">Color secundario (header/footer)</label><input type="color" name="secondary_color" class="form-control" value="{{ cfg.secondary_color }}" style="height:42px;padding:.25rem"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">Descripción de la tienda</label><textarea name="store_description" class="form-control" rows="2">{{ cfg.store_description }}</textarea></div>
+          <div class="form-group"><label class="form-label">URL del logo</label><input type="text" name="logo_url" class="form-control" value="{{ cfg.logo_url }}" placeholder="https://..."></div>
+          <div class="form-group"><label class="form-label">URL del banner</label><input type="text" name="banner_url" class="form-control" value="{{ cfg.banner_url }}" placeholder="https://..."></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">📱 Contacto y redes</span></div>
+      <div class="card-body">
+        <div class="config-grid">
+          <div class="form-group"><label class="form-label">WhatsApp (con código de país)</label><input type="text" name="whatsapp_number" class="form-control" value="{{ cfg.whatsapp_number }}" placeholder="+54 9 11 5555 6666"></div>
+          <div class="form-group"><label class="form-label">Email de contacto</label><input type="email" name="contact_email" class="form-control" value="{{ cfg.contact_email }}"></div>
+          <div class="form-group"><label class="form-label">Instagram (@usuario)</label><input type="text" name="instagram" class="form-control" value="{{ cfg.instagram }}" placeholder="mitienda"></div>
+          <div class="form-group"><label class="form-label">Facebook (URL)</label><input type="text" name="facebook" class="form-control" value="{{ cfg.facebook }}" placeholder="https://facebook.com/mitienda"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">Dirección física</label><input type="text" name="address" class="form-control" value="{{ cfg.address }}" placeholder="Av. Ejemplo 1234, Ciudad"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">⚙️ Opciones</span></div>
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;cursor:pointer;font-size:.875rem">
+          <input type="checkbox" name="show_stock" {% if cfg.show_stock %}checked{% endif %}> Mostrar estado de stock en la tienda
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+          <input type="checkbox" name="show_sku" {% if cfg.show_sku %}checked{% endif %}> Mostrar código SKU en los productos
+        </label>
+      </div>
+    </div>
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">💳 MercadoPago — Checkout Pro</span></div>
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;cursor:pointer;font-size:.875rem;font-weight:600">
+          <input type="checkbox" name="mp_enabled" {% if cfg.mp_enabled %}checked{% endif %}> Activar pago con MercadoPago en la tienda
+        </label>
+        <div class="config-grid">
+          <div class="form-group">
+            <label class="form-label">Public Key <span style="font-size:.7rem;color:var(--text-muted)">(empieza con APP_USR-)</span></label>
+            <input type="text" name="mp_public_key" class="form-control" value="{{ cfg.mp_public_key }}" placeholder="APP_USR-xxxxxxxx-xxxx-...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Access Token <span style="font-size:.7rem;color:var(--text-muted)">(empieza con APP_USR-)</span></label>
+            <input type="password" name="mp_access_token" class="form-control" value="{{ cfg.mp_access_token }}" placeholder="APP_USR-0000000000000000-...">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">URL de éxito tras el pago <span style="font-size:.7rem;color:var(--text-muted)">(opcional, por defecto /tienda/mp/gracias)</span></label>
+            <input type="text" name="mp_success_url" class="form-control" value="{{ cfg.mp_success_url }}" placeholder="https://mitienda.com/tienda/mp/gracias">
+          </div>
+        </div>
+        <div style="margin-top:.75rem;padding:.65rem .85rem;background:#fef9c3;border:1px solid #fde047;border-radius:8px;font-size:.78rem;color:#713f12">
+          💡 Obtené tus credenciales en <a href="https://www.mercadopago.com.ar/developers/panel/app" target="_blank" style="color:#92400e;font-weight:600">mercadopago.com.ar/developers</a> → Tu aplicación → Credenciales de producción.
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">🏦 Transferencia bancaria / CBU</span></div>
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;cursor:pointer;font-size:.875rem;font-weight:600">
+          <input type="checkbox" name="transfer_enabled" {% if cfg.transfer_enabled %}checked{% endif %}> Mostrar opción de pago por transferencia
+        </label>
+        <div class="config-grid">
+          <div class="form-group">
+            <label class="form-label">CBU</label>
+            <input type="text" name="transfer_cbu" class="form-control" value="{{ cfg.transfer_cbu }}" placeholder="0000000000000000000000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Alias</label>
+            <input type="text" name="transfer_alias" class="form-control" value="{{ cfg.transfer_alias }}" placeholder="MI.ALIAS.TIENDA">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Banco</label>
+            <input type="text" name="transfer_bank" class="form-control" value="{{ cfg.transfer_bank }}" placeholder="Banco Galicia, Brubank, etc.">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Titular de la cuenta</label>
+            <input type="text" name="transfer_owner" class="form-control" value="{{ cfg.transfer_owner }}" placeholder="Juan Pérez">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar configuración</button>
+    <a href="{{ url_for('store.store') }}" class="btn btn-outline" target="_blank"><i class="fas fa-eye"></i> Ver tienda</a>
+  </form>
+</div>
+
+<!-- TAB: EDITOR DE PÁGINA -->
+<div class="tab-content" id="tab-editor">
+  <form method="POST" action="{{ url_for('store.store_config_save') }}">
+
+    <!-- Barra de anuncio -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">📢 Barra de anuncio</span><span style="font-size:.78rem;color:var(--text-muted)">Aparece en la parte superior de la tienda</span></div>
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.85rem;cursor:pointer;font-size:.875rem;font-weight:600">
+          <input type="checkbox" name="announcement_enabled" {% if cfg.announcement_enabled %}checked{% endif %}> Mostrar barra de anuncio
+        </label>
+        <div class="config-grid">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Texto del anuncio</label>
+            <input type="text" name="announcement_text" class="form-control" value="{{ cfg.announcement_text }}" placeholder="🚚 Envíos gratis a partir de $10.000 · Pagá en cuotas sin interés">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Color de fondo</label>
+            <input type="color" name="announcement_color" class="form-control" value="{{ cfg.announcement_color or '#f97316' }}" style="height:42px;padding:.25rem">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Banner principal -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">🖼️ Banner principal</span><span style="font-size:.78rem;color:var(--text-muted)">El hero que aparece al entrar a la tienda</span></div>
+      <div class="card-body">
+        <div class="config-grid">
+          <div class="form-group">
+            <label class="form-label">Título del banner</label>
+            <input type="text" name="banner_title" class="form-control" value="{{ cfg.banner_title }}" placeholder="Ej: Pinturas de calidad para tu hogar">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">Si está vacío, usa el nombre de la tienda</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Subtítulo del banner</label>
+            <input type="text" name="banner_subtitle" class="form-control" value="{{ cfg.banner_subtitle }}" placeholder="Ej: Encontrá todo lo que necesitás para pintar">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">Si está vacío, usa el slogan</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección Destacados -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">⭐ Sección destacados</span></div>
+      <div class="card-body">
+        <div class="form-group" style="max-width:400px">
+          <label class="form-label">Título de la sección</label>
+          <input type="text" name="featured_title" class="form-control" value="{{ cfg.featured_title or '⭐ Destacados' }}" placeholder="⭐ Destacados">
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección Nosotros -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">🏢 Sección "Sobre nosotros"</span><span style="font-size:.78rem;color:var(--text-muted)">Aparece debajo de los productos</span></div>
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;cursor:pointer;font-size:.875rem;font-weight:600">
+          <input type="checkbox" name="about_enabled" {% if cfg.about_enabled %}checked{% endif %}> Mostrar sección "Sobre nosotros"
+        </label>
+        <div class="config-grid">
+          <div class="form-group">
+            <label class="form-label">Título de la sección</label>
+            <input type="text" name="about_title" class="form-control" value="{{ cfg.about_title or '¿Quiénes somos?' }}" placeholder="¿Quiénes somos?">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Imagen (URL)</label>
+            <input type="text" name="about_image_url" class="form-control" value="{{ cfg.about_image_url }}" placeholder="https://... (opcional)">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Contenido <span style="font-size:.72rem;color:var(--text-muted)">(editor con formato)</span></label>
+            <textarea name="about_text" id="about_text_editor" class="form-control" rows="6">{{ cfg.about_text }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">🦶 Texto del footer</span></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Texto adicional en el pie de página <span style="font-size:.72rem;color:var(--text-muted)">(opcional)</span></label>
+          <textarea name="footer_text" id="footer_text_editor" class="form-control" rows="3" placeholder="Ej: Atención al cliente de lunes a viernes de 9 a 18hs.">{{ cfg.footer_text }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Campos ocultos para no pisar la config existente -->
+    <input type="hidden" name="store_name" value="{{ cfg.store_name }}">
+    <input type="hidden" name="store_slogan" value="{{ cfg.store_slogan }}">
+    <input type="hidden" name="store_description" value="{{ cfg.store_description }}">
+    <input type="hidden" name="whatsapp_number" value="{{ cfg.whatsapp_number }}">
+    <input type="hidden" name="primary_color" value="{{ cfg.primary_color }}">
+    <input type="hidden" name="secondary_color" value="{{ cfg.secondary_color }}">
+    <input type="hidden" name="logo_url" value="{{ cfg.logo_url }}">
+    <input type="hidden" name="banner_url" value="{{ cfg.banner_url }}">
+    {% if cfg.show_stock %}<input type="hidden" name="show_stock" value="1">{% endif %}
+    {% if cfg.show_sku %}<input type="hidden" name="show_sku" value="1">{% endif %}
+    <input type="hidden" name="contact_email" value="{{ cfg.contact_email }}">
+    <input type="hidden" name="address" value="{{ cfg.address }}">
+    <input type="hidden" name="instagram" value="{{ cfg.instagram }}">
+    <input type="hidden" name="facebook" value="{{ cfg.facebook }}">
+    {% if cfg.mp_enabled %}<input type="hidden" name="mp_enabled" value="1">{% endif %}
+    <input type="hidden" name="mp_public_key" value="{{ cfg.mp_public_key }}">
+    <input type="hidden" name="mp_access_token" value="{{ cfg.mp_access_token }}">
+    <input type="hidden" name="mp_success_url" value="{{ cfg.mp_success_url }}">
+    {% if cfg.transfer_enabled %}<input type="hidden" name="transfer_enabled" value="1">{% endif %}
+    <input type="hidden" name="transfer_cbu" value="{{ cfg.transfer_cbu }}">
+    <input type="hidden" name="transfer_alias" value="{{ cfg.transfer_alias }}">
+    <input type="hidden" name="transfer_bank" value="{{ cfg.transfer_bank }}">
+    <input type="hidden" name="transfer_owner" value="{{ cfg.transfer_owner }}">
+
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar cambios</button>
+    <a href="{{ url_for('store.store') }}" class="btn btn-outline" target="_blank"><i class="fas fa-eye"></i> Ver tienda</a>
+  </form>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  tinymce.init({
+    selector: '#about_text_editor, #footer_text_editor',
+    plugins: 'lists link image emoticons',
+    toolbar: 'bold italic underline | bullist numlist | link | emoticons | removeformat',
+    menubar: false,
+    height: 220,
+    skin: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oxide-dark' : 'oxide',
+    content_css: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+    license_key: 'gpl',
+    promotion: false,
+    branding: false,
+  });
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-'+name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'editor') tinymce.editors.forEach(e => e.show());
+  }
+
+  function toggleExpand(id) {
+    const el = document.getElementById('expand-'+id);
+    el.classList.toggle('open');
+  }
+
+  function previewImg(inputId, previewId) {
+    const url = document.getElementById(inputId).value.trim();
+    const prev = document.getElementById(previewId);
+    prev.innerHTML = url ? `<img src="${url}" onerror="this.parentElement.innerHTML='❌ URL inválida'">` : '📷';
+  }
+
+  function quickToggle(id, checkbox) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/admin/tienda/producto/${id}`;
+    const fields = {visible: checkbox.checked ? '1' : '', featured: '0', original_price: '0', image_url: '', image_url_2: '', image_url_3: '', badge: '', colors: '', sizes: '', store_description: '', sort_order: '0'};
+    Object.entries(fields).forEach(([k,v]) => {
+      const i = document.createElement('input');
+      i.type='hidden'; i.name=k; i.value=v; form.appendChild(i);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+{% endblock %}

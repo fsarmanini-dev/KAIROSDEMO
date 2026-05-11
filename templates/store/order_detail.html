@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Pedido {{ order.order_number }} — Kairos Stock{% endblock %}
+{% block page_title %}Pedido {{ order.order_number }}{% endblock %}
+{% block page_subtitle %}Detalle completo del pedido{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('store.store_orders') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Volver</a>
+  {% if order.client_phone %}
+  <a href="https://wa.me/{{ order.client_phone.replace('+','').replace(' ','') }}?text=Hola+{{ order.client_name }}%2C+te+contactamos+por+tu+pedido+{{ order.order_number }}."
+     target="_blank" class="btn btn-success"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:1.25rem;align-items:start">
+
+  <!-- Left col -->
+  <div>
+    <!-- Items del pedido -->
+    <div class="card mb-2">
+      <div class="card-header">
+        <span class="card-title">📦 Productos del pedido</span>
+        <span style="font-size:.8rem;color:var(--text-muted)">{{ order.items|length }} item{% if order.items|length != 1 %}s{% endif %}</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Producto</th><th>Color</th><th>Talle/Presentación</th><th style="text-align:center">Cant.</th><th style="text-align:right">P. Unit.</th><th style="text-align:right">Subtotal</th></tr>
+          </thead>
+          <tbody>
+            {% for item in order.items %}
+            <tr>
+              <td style="font-weight:600;font-size:.875rem">{{ item.description }}</td>
+              <td>
+                {% if item.color %}
+                <div style="display:flex;align-items:center;gap:.4rem">
+                  <div style="width:16px;height:16px;border-radius:50%;background:{{ item.color }};border:1px solid var(--border)"></div>
+                  <span style="font-size:.75rem;color:var(--text-muted)">{{ item.color }}</span>
+                </div>
+                {% else %}—{% endif %}
+              </td>
+              <td style="font-size:.82rem;color:var(--text-muted)">{{ item.size or '—' }}</td>
+              <td style="text-align:center;font-weight:600">{{ item.quantity }}</td>
+              <td style="text-align:right" class="mono">${{ "%.2f"|format(item.unit_price) }}</td>
+              <td style="text-align:right" class="mono fw-600">${{ "%.2f"|format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" style="text-align:right;font-weight:700;padding:.85rem 1rem;color:var(--text-muted)">TOTAL</td>
+              <td style="text-align:right;font-weight:800;font-size:1.1rem;color:var(--brand);padding:.85rem 1rem" class="mono">${{ "%.2f"|format(order.total) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Notas -->
+    {% if order.notes %}
+    <div class="card">
+      <div class="card-header"><span class="card-title">📝 Notas del cliente</span></div>
+      <div class="card-body">
+        <p style="font-size:.875rem;color:var(--text-muted);line-height:1.6">{{ order.notes }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right col -->
+  <div>
+    <!-- Estado -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">⚡ Estado del pedido</span></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('store.update_order_status', id=order.id) }}">
+          <div class="form-group">
+            <select name="status" class="form-control" style="margin-bottom:.75rem">
+              {% for s in ['nuevo','en proceso','confirmado','enviado','cancelado'] %}
+              <option value="{{ s }}" {% if order.status==s %}selected{% endif %}>{{ s|capitalize }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary" style="width:100%"><i class="fas fa-save"></i> Actualizar estado</button>
+          </div>
+        </form>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem;text-align:center">
+          <i class="fab fa-whatsapp" style="color:#25d366"></i> El cliente recibirá un WA automático si tiene teléfono
+        </div>
+      </div>
+    </div>
+
+    <!-- Datos del cliente -->
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">👤 Datos del cliente</span></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:.6rem;font-size:.875rem">
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Nombre</span>{{ order.client_name }}</div>
+          {% if order.client_phone %}
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Teléfono</span>
+            <a href="tel:{{ order.client_phone }}" style="color:var(--brand)">{{ order.client_phone }}</a>
+          </div>
+          {% endif %}
+          {% if order.client_email %}
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Email</span>
+            <a href="mailto:{{ order.client_email }}" style="color:var(--brand)">{{ order.client_email }}</a>
+          </div>
+          {% endif %}
+          {% if order.client_address %}
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Dirección</span>{{ order.client_address }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Info del pedido -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">🗓️ Info del pedido</span></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:.6rem;font-size:.875rem">
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">N° de pedido</span>
+            <span class="mono fw-600" style="color:var(--brand)">{{ order.order_number }}</span>
+          </div>
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Fecha</span>{{ order.created_at.strftime('%d/%m/%Y a las %H:%M') }}</div>
+          <div><span style="font-weight:600;color:var(--text-muted);font-size:.72rem;display:block;text-transform:uppercase;letter-spacing:.05em">Total</span>
+            <span class="mono fw-600" style="font-size:1.1rem;color:var(--brand)">${{ "%.2f"|format(order.total) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

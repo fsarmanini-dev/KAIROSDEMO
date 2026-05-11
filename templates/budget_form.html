@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+{% block title %}Nuevo Presupuesto — Kairos Stock{% endblock %}
+{% block page_title %}Nuevo Presupuesto{% endblock %}
+{% block page_subtitle %}Generá un presupuesto para tu cliente{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('budgets.budgets') }}" class="btn btn-outline">
+    <i class="fas fa-arrow-left"></i> Volver
+  </a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .budget-layout { display:grid; grid-template-columns:1fr 400px; gap:1.25rem; align-items:start; }
+  @media(max-width:960px){ .budget-layout{ grid-template-columns:1fr; } }
+
+  .items-table th, .items-table td { padding:.6rem .75rem; }
+  .items-table th { background:var(--surface2); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+  .items-table td { border-bottom:1px solid var(--border); }
+  .items-table input { width:100%; border:1px solid var(--border); border-radius:6px; padding:.4rem .6rem; font-size:.85rem; background:var(--bg); color:var(--text); font-family:inherit; }
+  .items-table input:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 2px rgba(99,102,241,.1); }
+  .add-item-btn { width:100%; padding:.65rem; border:2px dashed var(--border); background:none; border-radius:8px; color:var(--text-muted); cursor:pointer; font-size:.85rem; font-family:inherit; transition:.15s; }
+  .add-item-btn:hover { border-color:var(--brand); color:var(--brand); background:var(--brand-bg); }
+
+  .totals-box { background:var(--surface2); border-radius:10px; padding:1rem; }
+  .total-row { display:flex; justify-content:space-between; padding:.35rem 0; font-size:.875rem; }
+  .total-row.grand { font-weight:700; font-size:1.1rem; color:var(--brand); border-top:2px solid var(--brand); margin-top:.35rem; padding-top:.65rem; }
+
+  .cat-pills-b { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.6rem; }
+  .cat-pill-b { padding:.22rem .65rem; border-radius:999px; border:1px solid var(--border); font-size:.75rem; cursor:pointer; background:var(--bg); transition:.15s; white-space:nowrap; }
+  .cat-pill-b:hover, .cat-pill-b.active { background:var(--brand-bg); border-color:var(--brand); color:var(--brand); }
+
+  .prod-list { max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:.3rem; }
+  .prod-row { display:flex; align-items:center; gap:.5rem; padding:.5rem .7rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); cursor:pointer; transition:.15s; }
+  .prod-row:hover { border-color:var(--brand); background:var(--brand-bg); }
+  .prod-row.no-stock { opacity:.4; cursor:not-allowed; }
+  .prod-info { flex:1; min-width:0; }
+  .prod-info .pname { font-size:.84rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prod-info .pmeta { font-size:.72rem; color:var(--text-muted); }
+  .pprice { font-size:.88rem; font-weight:700; color:var(--brand); white-space:nowrap; }
+  .padd { width:26px; height:26px; border-radius:6px; border:1px solid var(--border); background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:.15s; flex-shrink:0; }
+  .prod-row:hover .padd { background:var(--brand); color:white; border-color:var(--brand); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="budget-layout">
+
+  <!-- LEFT: client + items -->
+  <div>
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title"><i class="fas fa-user"></i> Datos del Cliente</span></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre / Empresa *</label><input type="text" id="clientName" class="form-control" placeholder="Nombre del cliente" required></div>
+          <div class="form-group"><label class="form-label">Email</label><input type="email" id="clientEmail" class="form-control" placeholder="email@ejemplo.com"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Teléfono</label><input type="text" id="clientPhone" class="form-control" placeholder="+54 9 ..."></div>
+          <div class="form-group"><label class="form-label">Dirección</label><input type="text" id="clientAddress" class="form-control" placeholder="Dirección..."></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-list"></i> Ítems del Presupuesto</span>
+        <button class="btn btn-outline btn-sm" onclick="addItem()"><i class="fas fa-plus"></i> Agregar línea</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="items-table" style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="width:40%">Descripción</th>
+              <th style="width:11%">Cant.</th>
+              <th style="width:19%">Precio unit.</th>
+              <th style="width:18%;text-align:right">Subtotal</th>
+              <th style="width:8%"></th>
+            </tr></thead>
+            <tbody id="itemsBody"></tbody>
+          </table>
+        </div>
+        <div style="padding:.75rem">
+          <button class="add-item-btn" onclick="addItem()"><i class="fas fa-plus"></i> Agregar ítem manualmente</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <div class="card-header"><span class="card-title"><i class="fas fa-comment"></i> Notas</span></div>
+      <div class="card-body">
+        <textarea id="budgetNotes" class="form-control" rows="3" placeholder="Condiciones de pago, observaciones, validez del presupuesto..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: totals + product catalog -->
+  <div style="position:sticky;top:80px;display:flex;flex-direction:column;gap:1rem">
+
+    <!-- Totals -->
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="fas fa-calculator"></i> Resumen</span></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Descuento (%)</label>
+            <input type="number" id="discountPct" class="form-control" value="0" min="0" max="100" oninput="recalc()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">IVA (%)</label>
+            <input type="number" id="taxPct" class="form-control" value="21" min="0" oninput="recalc()">
+          </div>
+        </div>
+        <div class="totals-box">
+          <div class="total-row"><span>Subtotal</span><span class="mono" id="tSubtotal">$0.00</span></div>
+          <div class="total-row" id="tDiscountRow" style="display:none"><span id="tDiscountLabel">Descuento</span><span class="mono" style="color:var(--danger)" id="tDiscount">-$0.00</span></div>
+          <div class="total-row" id="tTaxRow" style="display:none"><span id="tTaxLabel">IVA</span><span class="mono" id="tTax">$0.00</span></div>
+          <div class="total-row grand"><span>TOTAL</span><span class="mono" id="tTotal">$0.00</span></div>
+        </div>
+        <button onclick="saveBudget()" class="btn btn-primary" style="width:100%;margin-top:1rem;justify-content:center">
+          <i class="fas fa-save"></i> Guardar Presupuesto
+        </button>
+      </div>
+    </div>
+
+    <!-- Product catalog -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-box"></i> Productos</span>
+        <span class="badge badge-purple" id="prodCount">{{ products|length }}</span>
+      </div>
+      <div class="card-body">
+        <!-- Search / barcode -->
+        <div style="display:flex;gap:.4rem;margin-bottom:.6rem">
+          <div style="position:relative;flex:1">
+            <i class="fas fa-barcode" style="position:absolute;left:.7rem;top:50%;transform:translateY(-50%);color:var(--brand);font-size:.85rem"></i>
+            <input type="text" id="prodSearch" class="form-control"
+              placeholder="Buscar o escanear código..."
+              style="padding-left:2.2rem"
+              oninput="filterProducts(this.value)"
+              autocomplete="off">
+          </div>
+        </div>
+        <!-- Categories -->
+        <div class="cat-pills-b" id="catPillsB">
+          <span class="cat-pill-b active" data-cat="">Todos</span>
+          {% for cat in categories %}
+          <span class="cat-pill-b" data-cat="{{ cat.id }}">{{ cat.name }}</span>
+          {% endfor %}
+        </div>
+        <!-- List -->
+        <div class="prod-list" id="prodList"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const allProducts = {{ products | tojson }};
+let itemCount = 0;
+let activeCat = '';
+let searchQ = '';
+
+// ── Product list ───────────────────────────────────────────────────────────
+function renderProducts() {
+  const list = document.getElementById('prodList');
+  const filtered = allProducts.filter(p => {
+    const matchCat = !activeCat || String(p.category_id) === String(activeCat);
+    const matchQ   = !searchQ || p.name.toLowerCase().includes(searchQ) || p.sku.toLowerCase().includes(searchQ);
+    return matchCat && matchQ;
+  });
+  document.getElementById('prodCount').textContent = filtered.length;
+  if (!filtered.length) {
+    list.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:.85rem">
+      <i class="fas fa-box-open" style="font-size:1.5rem;opacity:.3;display:block;margin-bottom:.4rem"></i>Sin productos</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(p => {
+    const stockHtml = p.stock > 0
+      ? `<span style="color:#16a34a"><i class="fas fa-check" style="font-size:.7rem"></i> ${p.stock} ${p.unit}</span>`
+      : `<span style="color:var(--danger)"><i class="fas fa-xmark" style="font-size:.7rem"></i> Sin stock</span>`;
+    const clickFn = p.stock > 0 ? `selectProduct(${p.id}, ${JSON.stringify(p.name)}, ${p.price})` : '';
+    return `<div class="prod-row ${p.stock <= 0 ? 'no-stock' : ''}" onclick="${clickFn}">
+      <div class="prod-info">
+        <div class="pname">${p.name}</div>
+        <div class="pmeta">${p.sku ? `<span class="mono">${p.sku}</span> · ` : ''}${stockHtml}</div>
+      </div>
+      <div class="pprice">$${p.price.toFixed(2)}</div>
+      <div class="padd" title="Agregar"><i class="fas fa-plus"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function filterProducts(q) {
+  searchQ = q.trim().toLowerCase();
+  renderProducts();
+}
+
+// Barcode scanner: exact SKU on Enter
+document.getElementById('prodSearch').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim();
+  const exact = allProducts.find(p => p.sku && p.sku === q && p.stock > 0);
+  if (exact) {
+    selectProduct(exact.id, exact.name, exact.price);
+    e.target.value = '';
+    searchQ = '';
+    renderProducts();
+  }
+});
+
+document.querySelectorAll('.cat-pill-b').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.cat-pill-b').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    activeCat = pill.dataset.cat;
+    renderProducts();
+  });
+});
+
+function selectProduct(id, name, price) {
+  addItem(name, 1, price, id);
+}
+
+// ── Items ─────────────────────────────────────────────────────────────────
+function addItem(desc='', qty=1, price=0, productId=null) {
+  const id = ++itemCount;
+  const tr = document.createElement('tr');
+  tr.id = `item-${id}`;
+  tr.innerHTML = `
+    <td><input type="text" placeholder="Descripción del ítem" value="${desc.replace(/"/g,'&quot;')}" oninput="recalc()"></td>
+    <td><input type="number" value="${qty}" min="0.01" step="0.01" oninput="recalc()" style="text-align:right"></td>
+    <td><input type="number" value="${price}" min="0" step="0.01" oninput="recalc()" style="text-align:right" data-product-id="${productId||''}"></td>
+    <td class="mono subtotal" style="text-align:right;font-weight:600">$${(qty*price).toFixed(2)}</td>
+    <td style="text-align:center"><button onclick="removeItem(${id})" style="border:none;background:none;color:var(--danger);cursor:pointer;font-size:1rem" title="Eliminar"><i class="fas fa-times"></i></button></td>`;
+  document.getElementById('itemsBody').appendChild(tr);
+  if (!desc) tr.querySelector('input').focus();
+  recalc();
+}
+
+function removeItem(id) { document.getElementById(`item-${id}`).remove(); recalc(); }
+
+function recalc() {
+  let subtotal = 0;
+  document.querySelectorAll('#itemsBody tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const sub = (parseFloat(inputs[1].value)||0) * (parseFloat(inputs[2].value)||0);
+    tr.querySelector('.subtotal').textContent = '$' + sub.toFixed(2);
+    subtotal += sub;
+  });
+  const disc    = parseFloat(document.getElementById('discountPct').value) || 0;
+  const tax     = parseFloat(document.getElementById('taxPct').value) || 0;
+  const discAmt = subtotal * disc / 100;
+  const taxAmt  = (subtotal - discAmt) * tax / 100;
+  const total   = subtotal - discAmt + taxAmt;
+  document.getElementById('tSubtotal').textContent = '$' + subtotal.toFixed(2);
+  document.getElementById('tDiscountLabel').textContent = `Descuento (${disc}%)`;
+  document.getElementById('tDiscount').textContent = '-$' + discAmt.toFixed(2);
+  document.getElementById('tTaxLabel').textContent = `IVA (${tax}%)`;
+  document.getElementById('tTax').textContent = '$' + taxAmt.toFixed(2);
+  document.getElementById('tTotal').textContent = '$' + total.toFixed(2);
+  document.getElementById('tDiscountRow').style.display = disc > 0 ? 'flex' : 'none';
+  document.getElementById('tTaxRow').style.display = tax > 0 ? 'flex' : 'none';
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────
+async function saveBudget() {
+  const clientName = document.getElementById('clientName').value.trim();
+  if (!clientName) { alert('Ingresá el nombre del cliente'); document.getElementById('clientName').focus(); return; }
+  const items = [];
+  let valid = true;
+  document.querySelectorAll('#itemsBody tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const desc = inputs[0].value.trim();
+    if (!desc) { valid = false; inputs[0].style.borderColor = 'var(--danger)'; return; }
+    items.push({ description: desc, quantity: parseFloat(inputs[1].value)||0, unit_price: parseFloat(inputs[2].value)||0, product_id: inputs[2].dataset.productId || null });
+  });
+  if (!valid) { alert('Completá la descripción de todos los ítems'); return; }
+  if (!items.length) { alert('Agregá al menos un ítem'); return; }
+
+  const btn = document.querySelector('[onclick="saveBudget()"]');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+  try {
+    const res = await fetch('/presupuestos/nuevo', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        client_name: clientName,
+        client_email: document.getElementById('clientEmail').value,
+        client_phone: document.getElementById('clientPhone').value,
+        client_address: document.getElementById('clientAddress').value,
+        notes: document.getElementById('budgetNotes').value,
+        discount: parseFloat(document.getElementById('discountPct').value)||0,
+        tax: parseFloat(document.getElementById('taxPct').value)||21,
+        items,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Error al guardar.'); return; }
+    window.location.href = `/presupuestos/${data.id}`;
+  } catch(e) { alert('Error de conexión.'); }
+  finally { btn.disabled=false; btn.innerHTML='<i class="fas fa-save"></i> Guardar Presupuesto'; }
+}
+
+// Init
+renderProducts();
+addItem();
+</script>
+{% endblock %}

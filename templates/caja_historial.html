@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}Historial de Caja — Kairos Stock{% endblock %}
+{% block page_title %}Historial de Caja{% endblock %}
+{% block page_subtitle %}Ventas y movimientos{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('caja.caja') }}" class="btn btn-primary btn-sm">
+    <i class="fas fa-cash-register"></i> Ir a Caja
+  </a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .hist-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media(max-width:800px){ .hist-grid{ grid-template-columns:1fr; } }
+  .badge-ingreso { background:#dcfce7; color:#16a34a; }
+  .badge-egreso  { background:#fee2e2; color:#dc2626; }
+  .badge-venta   { background:var(--brand-bg); color:var(--brand); }
+  .summary-bar { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .summary-chip { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                  padding:.5rem 1rem; font-size:.85rem; display:flex; gap:.4rem; align-items:center; }
+</style>
+
+<!-- Filtro fecha -->
+<form method="GET" action="{{ url_for('caja.historial_caja') }}" class="flex gap-1 mb-2" style="align-items:center">
+  <label style="font-size:.85rem;color:var(--text-muted)">Filtrar por fecha:</label>
+  <input type="date" name="fecha" value="{{ fecha }}" class="form-control" style="max-width:180px">
+  <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+  {% if fecha %}<a href="{{ url_for('caja.historial_caja') }}" class="btn btn-outline btn-sm">Ver todo</a>{% endif %}
+</form>
+
+<!-- Resumen -->
+<div class="summary-bar">
+  <div class="summary-chip">
+    <i class="fas fa-receipt" style="color:var(--brand)"></i>
+    <strong>Ventas:</strong> ${{ "%.2f"|format(total_ventas) }}
+  </div>
+  <div class="summary-chip">
+    <i class="fas fa-arrow-down" style="color:#16a34a"></i>
+    <strong>Ingresos manuales:</strong> ${{ "%.2f"|format(total_ingresos) }}
+  </div>
+  <div class="summary-chip">
+    <i class="fas fa-arrow-up" style="color:#ef4444"></i>
+    <strong>Egresos:</strong> ${{ "%.2f"|format(total_egresos) }}
+  </div>
+  <div class="summary-chip">
+    <i class="fas fa-wallet"></i>
+    <strong>Saldo:</strong>
+    <span style="color:{% if (total_ventas + total_ingresos - total_egresos) < 0 %}var(--danger){% else %}var(--text){% endif %}">
+      ${{ "%.2f"|format(total_ventas + total_ingresos - total_egresos) }}
+    </span>
+  </div>
+</div>
+
+<div class="hist-grid">
+  <!-- Ventas -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-receipt"></i> Ventas</span>
+        <span class="badge badge-purple">{{ ventas.total }}</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>Fecha</th>
+                <th>Items</th>
+                <th>IVA</th>
+                <th style="text-align:right">Total</th>
+                <th style="text-align:center;width:44px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in ventas.items %}
+              <tr>
+                <td><span class="mono" style="font-size:.8rem;color:var(--brand)">{{ v.ticket_number }}</span></td>
+                <td class="text-muted" style="font-size:.8rem">{{ v.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td class="text-muted">{{ v.items|length }}</td>
+                <td>
+                  {% if v.tax_rate > 0 %}
+                    <span class="badge badge-purple">{{ v.tax_rate|int }}%</span>
+                  {% else %}
+                    <span class="text-muted" style="font-size:.75rem">—</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:right;font-weight:600">${{ "%.2f"|format(v.total) }}</td>
+                <td style="text-align:center">
+                  <button class="btn btn-outline btn-icon btn-sm" title="Ver ticket"
+                    onclick="verTicket({{ v.id }})">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                <i class="fas fa-receipt" style="font-size:1.5rem;opacity:.3;display:block;margin-bottom:.4rem"></i>
+                Sin ventas{% if fecha %} para esta fecha{% endif %}
+              </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <!-- Paginación -->
+        {% if ventas.pages > 1 %}
+        <div style="padding:.75rem 1.25rem;display:flex;gap:.4rem;justify-content:center">
+          {% if ventas.has_prev %}
+          <a href="{{ url_for('caja.historial_caja', page=ventas.prev_num, fecha=fecha) }}" class="btn btn-outline btn-sm">‹</a>
+          {% endif %}
+          <span style="padding:.3rem .75rem;font-size:.82rem;color:var(--text-muted)">{{ ventas.page }}/{{ ventas.pages }}</span>
+          {% if ventas.has_next %}
+          <a href="{{ url_for('caja.historial_caja', page=ventas.next_num, fecha=fecha) }}" class="btn btn-outline btn-sm">›</a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Movimientos de caja -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-money-bill-transfer"></i> Movimientos de caja</span>
+        <span class="badge badge-purple">{{ movimientos|length }}</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Concepto</th>
+                <th>Fecha</th>
+                <th style="text-align:right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in movimientos %}
+              <tr>
+                <td>
+                  <span class="badge {{ 'badge-ingreso' if m.tipo == 'ingreso' else 'badge-egreso' }}">
+                    <i class="fas fa-arrow-{{ 'down' if m.tipo == 'ingreso' else 'up' }}"></i>
+                    {{ m.tipo|capitalize }}
+                  </span>
+                </td>
+                <td style="font-size:.83rem">{{ m.concepto or '—' }}</td>
+                <td class="text-muted" style="font-size:.8rem">{{ m.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td style="text-align:right;font-weight:600;color:{{ '#16a34a' if m.tipo == 'ingreso' else '#dc2626' }}">
+                  {{ '+' if m.tipo == 'ingreso' else '-' }}${{ "%.2f"|format(m.monto) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                <i class="fas fa-money-bill-wave" style="font-size:1.5rem;opacity:.3;display:block;margin-bottom:.4rem"></i>
+                Sin movimientos{% if fecha %} para esta fecha{% endif %}
+              </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle ticket -->
+<div class="modal-backdrop" id="modalVerTicket">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-receipt" style="color:var(--brand)"></i> Detalle del ticket</span>
+      <button class="modal-close" onclick="closeModal('modalVerTicket')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="ticketDetalle"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalVerTicket')">Cerrar</button>
+      <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Imprimir</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+async function verTicket(id) {
+  const res = await fetch('/caja/ticket/' + id);
+  const d = await res.json();
+  const lines = d.items.map(i =>
+    `<tr>
+      <td>${i.description}</td>
+      <td style="text-align:center">${i.quantity}</td>
+      <td style="text-align:right">$${i.unit_price.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:600">$${i.subtotal.toFixed(2)}</td>
+    </tr>`
+  ).join('');
+  document.getElementById('ticketDetalle').innerHTML = `
+    <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem">
+      ${d.ticket_number} &nbsp;·&nbsp; ${d.created_at} &nbsp;·&nbsp; ${d.user}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead><tr style="background:var(--brand-bg)">
+        <th style="padding:6px 8px;text-align:left">Producto</th>
+        <th style="padding:6px 8px;text-align:center">Cant.</th>
+        <th style="padding:6px 8px;text-align:right">Precio</th>
+        <th style="padding:6px 8px;text-align:right">Subtotal</th>
+      </tr></thead>
+      <tbody>${lines}</tbody>
+    </table>
+    <div style="margin-top:.75rem;font-size:.85rem">
+      <div style="display:flex;justify-content:space-between;padding:.2rem 0;color:var(--text-muted)">
+        <span>Subtotal</span><span>$${d.subtotal.toFixed(2)}</span>
+      </div>
+      ${d.tax_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:.2rem 0;color:var(--text-muted)"><span>IVA ${d.tax_rate}%</span><span>$${d.tax_amount.toFixed(2)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;padding:.4rem 0;font-weight:700;border-top:1px solid var(--border);margin-top:.3rem">
+        <span>TOTAL</span><span>$${d.total.toFixed(2)}</span>
+      </div>
+      <div style="color:var(--text-muted);font-size:.78rem;margin-top:.3rem">
+        Pago: ${d.payment_method} ${d.notes ? '· ' + d.notes : ''}
+      </div>
+    </div>`;
+  openModal('modalVerTicket');
+}
+</script>
+{% endblock %}

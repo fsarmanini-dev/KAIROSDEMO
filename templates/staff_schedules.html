@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}Horarios de {{ user.username }} — Kairos Stock{% endblock %}
+{% block page_title %}Horarios de {{ user.username }}{% endblock %}
+{% block page_subtitle %}Configurá en qué días y horarios puede ingresar al sistema{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('users.staff_monitor') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Volver al monitor</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+  .day-row { display:grid; grid-template-columns:120px 1fr; gap:1rem; align-items:center; padding:1rem 1.25rem; border-bottom:1px solid var(--border); }
+  .day-row:last-child { border-bottom:none; }
+  .day-toggle { display:flex; align-items:center; gap:.65rem; }
+  .time-inputs { display:flex; align-items:center; gap:.5rem; }
+  .time-inputs input[type=time] { padding:.4rem .6rem; border:1px solid var(--border); border-radius:7px; font-family:'Sora',sans-serif; font-size:.85rem; color:var(--text); background:var(--surface); }
+  .time-inputs input[type=time]:focus { outline:none; border-color:var(--brand); }
+  .day-disabled .time-inputs { opacity:.35; pointer-events:none; }
+  .preview-chip { display:inline-block; padding:.25rem .6rem; border-radius:6px; font-size:.72rem; font-weight:600; background:var(--brand-bg); color:var(--brand); margin-left:.5rem; }
+  .info-box { padding:.85rem 1rem; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-size:.82rem; color:#1d4ed8; margin-bottom:1.25rem; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="info-box">
+  <i class="fas fa-info-circle"></i>
+  <strong>Sin horarios activos</strong> = acceso libre (sin restricción horaria).<br>
+  Activá un día para restringir el acceso a ese rango. Los días desactivados quedan bloqueados.
+  Los <strong>Admins</strong> siempre pueden entrar, independientemente de los horarios.
+</div>
+
+<div class="card mb-2">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <div style="width:40px;height:40px;border-radius:10px;background:{% if user.role=='admin' %}var(--brand){% elif user.role=='editor' %}var(--success){% else %}#94a3b8{% endif %};display:flex;align-items:center;justify-content:center;color:white;font-weight:700">
+        {% if user.avatar_url %}<img src="{{ user.avatar_url }}" style="width:100%;height:100%;border-radius:10px;object-fit:cover">
+        {% else %}{{ user.username[0].upper() }}{% endif %}
+      </div>
+      <div>
+        <div style="font-weight:700">{{ user.username }}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">{{ user.email }} · <span class="badge {% if user.role=='admin' %}badge-purple{% elif user.role=='editor' %}badge-success{% else %}badge-gray{% endif %}" style="font-size:.62rem">{{ user.role }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST" action="{{ url_for('users.staff_schedules', id=user.id) }}" id="schedForm">
+    {% for s in schedule_map %}
+    <div class="day-row {% if not s.enabled %}day-disabled{% endif %}" id="dayrow-{{ s.day }}">
+      <div class="day-toggle">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:600;font-size:.875rem">
+          <input type="checkbox" name="day_{{ s.day }}_enabled" {% if s.enabled %}checked{% endif %}
+            onchange="toggleDay({{ s.day }}, this.checked)">
+          {{ s.name }}
+        </label>
+      </div>
+      <div class="time-inputs" id="times-{{ s.day }}">
+        <span style="font-size:.8rem;color:var(--text-muted)">Desde</span>
+        <input type="time" name="day_{{ s.day }}_start" value="{{ s.start }}" required>
+        <span style="font-size:.8rem;color:var(--text-muted)">hasta</span>
+        <input type="time" name="day_{{ s.day }}_end" value="{{ s.end }}" required>
+        <span class="preview-chip" id="chip-{{ s.day }}">{{ s.start }}–{{ s.end }}</span>
+      </div>
+    </div>
+    {% endfor %}
+
+    <div style="padding:1rem 1.25rem;display:flex;gap:.75rem">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar horarios</button>
+      <button type="button" class="btn btn-outline" onclick="setPreset('weekdays')">Lun–Vie 9–18</button>
+      <button type="button" class="btn btn-outline" onclick="setPreset('business')">Lun–Sáb 8–20</button>
+      <button type="button" class="btn btn-outline" onclick="setPreset('clear')">Sin restricciones</button>
+    </div>
+  </form>
+</div>
+
+<!-- Current schedule preview -->
+<div class="card">
+  <div class="card-header"><span class="card-title">👁️ Vista previa del horario</span></div>
+  <div style="padding:1rem 1.25rem" id="schedPreview"></div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  function toggleDay(day, enabled) {
+    const row = document.getElementById('dayrow-' + day);
+    const times = document.getElementById('times-' + day);
+    if (enabled) {
+      row.classList.remove('day-disabled');
+      times.querySelectorAll('input').forEach(i => i.disabled = false);
+    } else {
+      row.classList.add('day-disabled');
+      times.querySelectorAll('input').forEach(i => i.disabled = true);
+    }
+    updatePreview();
+  }
+
+  function updatePreview() {
+    const days = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+    const shorts = ['L','M','X','J','V','S','D'];
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:.5rem">';
+    for (let d = 0; d < 7; d++) {
+      const cb = document.querySelector(`input[name="day_${d}_enabled"]`);
+      const st = document.querySelector(`input[name="day_${d}_start"]`);
+      const en = document.querySelector(`input[name="day_${d}_end"]`);
+      if (cb && cb.checked) {
+        html += `<div style="background:var(--brand-bg);border:1px solid var(--brand-light);border-radius:8px;padding:.4rem .75rem;font-size:.8rem">
+          <strong style="color:var(--brand)">${days[d]}</strong><br>
+          <span style="color:var(--text-muted)">${st ? st.value : '?'} – ${en ? en.value : '?'}</span>
+        </div>`;
+      } else {
+        html += `<div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:.4rem .75rem;font-size:.8rem;opacity:.5">
+          <strong>${days[d]}</strong><br><span style="color:#94a3b8">Bloqueado</span>
+        </div>`;
+      }
+      // update chip
+      const chip = document.getElementById('chip-' + d);
+      if (chip && st && en) chip.textContent = st.value + '–' + en.value;
+    }
+    html += '</div>';
+    document.getElementById('schedPreview').innerHTML = html;
+  }
+
+  function setPreset(type) {
+    for (let d = 0; d < 7; d++) {
+      const cb = document.querySelector(`input[name="day_${d}_enabled"]`);
+      const st = document.querySelector(`input[name="day_${d}_start"]`);
+      const en = document.querySelector(`input[name="day_${d}_end"]`);
+      if (!cb) continue;
+      if (type === 'clear') {
+        cb.checked = false;
+      } else if (type === 'weekdays') {
+        cb.checked = d < 5;
+        if (st) st.value = '09:00';
+        if (en) en.value = '18:00';
+      } else if (type === 'business') {
+        cb.checked = d < 6;
+        if (st) st.value = '08:00';
+        if (en) en.value = '20:00';
+      }
+      toggleDay(d, cb.checked);
+    }
+    updatePreview();
+  }
+
+  // live update chips on time change
+  document.querySelectorAll('input[type=time]').forEach(input => {
+    input.addEventListener('change', updatePreview);
+  });
+
+  updatePreview();
+</script>
+{% endblock %}

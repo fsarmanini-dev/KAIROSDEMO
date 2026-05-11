@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pago exitoso — {{ cfg.store_name }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Sora',sans-serif; background:#f8fafc; display:flex; align-items:center; justify-content:center; min-height:100vh; padding:1.5rem; }
+    .card { background:#fff; border-radius:16px; padding:2.5rem 2rem; max-width:480px; width:100%; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,.08); }
+    .icon { font-size:4rem; margin-bottom:1rem; }
+    h1 { font-size:1.5rem; font-weight:800; color:#065f46; margin-bottom:.5rem; }
+    p { color:#64748b; font-size:.9rem; line-height:1.6; margin-bottom:1.5rem; }
+    .order-num { background:#d1fae5; color:#065f46; border-radius:8px; padding:.5rem 1rem; font-weight:700; font-size:1rem; display:inline-block; margin-bottom:1.5rem; }
+    .btn { display:inline-block; padding:.75rem 1.5rem; background:{{ cfg.primary_color }}; color:white; border-radius:10px; text-decoration:none; font-weight:700; font-size:.9rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✅</div>
+    <h1>¡Pago recibido!</h1>
+    {% if order_number %}
+    <div class="order-num">Pedido {{ order_number }}</div>
+    {% endif %}
+    <p>Tu pago fue procesado exitosamente por MercadoPago. Pronto nos pondremos en contacto para coordinar la entrega.</p>
+    <a href="{{ url_for('store.store') }}" class="btn">Volver a la tienda</a>
+  </div>
+</body>
+</html>

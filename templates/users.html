@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}Usuarios — Kairos Stock{% endblock %}
+{% block page_title %}Usuarios{% endblock %}
+{% block page_subtitle %}Gestión de accesos al sistema{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary" onclick="openModal('newUserModal')"><i class="fas fa-plus"></i> Nuevo Usuario</button>
+{% endblock %}
+{% block extra_head %}
+<style>
+  .user-card { display:grid; grid-template-columns:56px 1fr auto; gap:1rem; align-items:center; padding:1rem 1.25rem; border-bottom:1px solid var(--border); transition:background .12s; }
+  .user-card:last-child { border-bottom:none; }
+  .user-card:hover { background:var(--surface2); }
+  .avatar { width:46px; height:46px; border-radius:12px; object-fit:cover; display:flex; align-items:center; justify-content:center; font-size:1.1rem; font-weight:700; color:white; flex-shrink:0; overflow:hidden; }
+  .avatar img { width:100%; height:100%; object-fit:cover; border-radius:12px; }
+  .user-meta { font-size:.75rem; color:var(--text-muted); margin-top:.2rem; display:flex; flex-wrap:wrap; gap:.6rem; }
+  .user-actions { display:flex; gap:.4rem; flex-shrink:0; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Usuarios del sistema</span>
+    <span style="font-size:.8rem;color:var(--text-muted)">{{ users|length }} usuarios registrados</span>
+  </div>
+  {% for u in users %}
+  <div class="user-card">
+    <div class="avatar" style="background:{% if u.role=='admin' %}var(--brand){% elif u.role=='editor' %}var(--success){% else %}#94a3b8{% endif %}">
+      {% if u.avatar_url %}
+        <img src="{{ u.avatar_url }}" alt="{{ u.username }}" onerror="this.parentElement.textContent='{{ u.username[0].upper() }}'">
+      {% else %}
+        {{ u.username[0].upper() }}
+      {% endif %}
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:.95rem">{{ u.username }}</span>
+        {% if u.id == current_user.id %}<span class="badge badge-purple" style="font-size:.62rem">Tú</span>{% endif %}
+        <span class="badge {% if u.role=='admin' %}badge-purple{% elif u.role=='editor' %}badge-success{% else %}badge-gray{% endif %}" style="font-size:.65rem">{{ u.role }}</span>
+        {% if not u.is_active_user %}<span class="badge badge-danger" style="font-size:.62rem">Inactivo</span>{% endif %}
+      </div>
+      <div class="user-meta">
+        <span><i class="fas fa-envelope" style="opacity:.5"></i> {{ u.email }}</span>
+        <span><i class="fas fa-calendar-plus" style="opacity:.5"></i> Alta: {{ u.created_at.strftime('%d/%m/%Y') }}</span>
+        {% if u.last_login %}
+        <span><i class="fas fa-clock" style="opacity:.5"></i> Último acceso: {{ u.last_login.strftime('%d/%m/%Y %H:%M') }}</span>
+        {% else %}
+        <span style="color:#f59e0b"><i class="fas fa-clock" style="opacity:.5"></i> Sin accesos registrados</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="user-actions">
+      <button class="btn btn-sm btn-outline" title="Editar"
+        onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.email }}', '{{ u.role }}', '{{ u.avatar_url or '' }}')">
+        <i class="fas fa-pen"></i>
+      </button>
+      {% if u.id != current_user.id %}
+      <form method="POST" action="{{ url_for('users.toggle_user', id=u.id) }}" style="display:inline">
+        <button type="submit" class="btn btn-sm {% if u.is_active_user %}btn-warning{% else %}btn-success{% endif %}"
+          title="{% if u.is_active_user %}Desactivar{% else %}Activar{% endif %}">
+          <i class="fas fa-{% if u.is_active_user %}ban{% else %}check{% endif %}"></i>
+        </button>
+      </form>
+      <button class="btn btn-sm btn-danger" title="Eliminar"
+        onclick="openDeleteModal({{ u.id }}, '{{ u.username }}')">
+        <i class="fas fa-trash"></i>
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div style="padding:3rem;text-align:center;color:var(--text-muted)">
+    <i class="fas fa-users" style="font-size:2rem;opacity:.25;display:block;margin-bottom:.5rem"></i>
+    No hay usuarios registrados
+  </div>
+  {% endfor %}
+</div>
+
+<div style="margin-top:1.25rem;padding:1rem 1.25rem;background:var(--brand-bg);border-radius:var(--radius);border:1px solid var(--brand-light)">
+  <div style="font-size:.82rem;font-weight:700;color:var(--brand);margin-bottom:.5rem"><i class="fas fa-info-circle"></i> Roles del sistema</div>
+  <div style="font-size:.8rem;color:var(--text-muted);display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">
+    <div><strong>Admin:</strong> Acceso total, gestión de usuarios y configuración</div>
+    <div><strong>Editor:</strong> Crea y modifica productos, movimientos y presupuestos</div>
+    <div><strong>Viewer:</strong> Solo visualización, sin modificaciones</div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO USUARIO -->
+<div class="modal-backdrop" id="newUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-user-plus"></i> Nuevo Usuario</span>
+      <button class="modal-close" onclick="closeModal('newUserModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('users.new_user') }}">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre de usuario *</label><input type="text" name="username" class="form-control" required placeholder="usuario123"></div>
+          <div class="form-group"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" required placeholder="email@ejemplo.com"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Contraseña *</label><input type="password" name="password" class="form-control" required placeholder="Contraseña segura"></div>
+        <div class="form-group">
+          <label class="form-label">Rol</label>
+          <select name="role" class="form-control">
+            <option value="viewer">Viewer — Solo lectura</option>
+            <option value="editor">Editor — Puede modificar</option>
+            <option value="admin">Admin — Acceso total</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">URL de avatar <span style="font-size:.72rem;color:var(--text-muted)">(opcional)</span></label>
+          <input type="text" name="avatar_url" class="form-control" placeholder="https://...jpg">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('newUserModal')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear Usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR USUARIO -->
+<div class="modal-backdrop" id="editUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-user-edit"></i> Editar Usuario</span>
+      <button class="modal-close" onclick="closeModal('editUserModal')">&times;</button>
+    </div>
+    <form method="POST" id="editUserForm" action="">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre de usuario *</label><input type="text" name="username" id="edit_username" class="form-control" required></div>
+          <div class="form-group"><label class="form-label">Email *</label><input type="email" name="email" id="edit_email" class="form-control" required></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rol</label>
+          <select name="role" id="edit_role" class="form-control">
+            <option value="viewer">Viewer — Solo lectura</option>
+            <option value="editor">Editor — Puede modificar</option>
+            <option value="admin">Admin — Acceso total</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">URL de avatar <span style="font-size:.72rem;color:var(--text-muted)">(opcional)</span></label>
+          <input type="text" name="avatar_url" id="edit_avatar" class="form-control" placeholder="https://...jpg">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nueva contraseña <span style="font-size:.72rem;color:var(--text-muted)">(dejá vacío para no cambiar)</span></label>
+          <input type="password" name="password" class="form-control" placeholder="Nueva contraseña...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('editUserModal')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: ELIMINAR USUARIO -->
+<div class="modal-backdrop" id="deleteUserModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)"><i class="fas fa-trash"></i> Eliminar Usuario</span>
+      <button class="modal-close" onclick="closeModal('deleteUserModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:1rem">¿Estás seguro que querés eliminar al usuario <strong id="deleteUserName"></strong>?</p>
+      <div style="padding:.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:.82rem;color:#b91c1c">
+        <i class="fas fa-exclamation-triangle"></i> Esta acción no se puede deshacer.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('deleteUserModal')">Cancelar</button>
+      <form method="POST" id="deleteUserForm" action="" style="display:inline">
+        <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Sí, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  function openEditModal(id, username, email, role, avatarUrl) {
+    document.getElementById('editUserForm').action = `/usuarios/${id}/editar`;
+    document.getElementById('edit_username').value = username;
+    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_role').value = role;
+    document.getElementById('edit_avatar').value = avatarUrl;
+    openModal('editUserModal');
+  }
+
+  function openDeleteModal(id, username) {
+    document.getElementById('deleteUserForm').action = `/usuarios/${id}/eliminar`;
+    document.getElementById('deleteUserName').textContent = username;
+    openModal('deleteUserModal');
+  }
+
+  document.querySelectorAll('.modal-backdrop').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  });
+</script>
+{% endblock %}

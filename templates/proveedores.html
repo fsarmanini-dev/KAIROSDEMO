@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+
+{% block title %}Proveedores — Kairos Stock{% endblock %}
+{% block page_title %}Proveedores{% endblock %}
+{% block page_subtitle %}{{ proveedores|length }} proveedor{% if proveedores|length != 1 %}es{% endif %}{% if q %} — búsqueda: "{{ q }}"{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('proveedores.export_proveedores_excel') }}" class="btn btn-success btn-sm">
+    <i class="fas fa-file-excel"></i> Exportar
+  </a>
+  {% if current_user.can_edit() %}
+  <a href="{{ url_for('proveedores.export_proveedores_template') }}" class="btn btn-outline btn-sm">
+    <i class="fas fa-download"></i> Plantilla
+  </a>
+  <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0">
+    <i class="fas fa-upload"></i> Importar
+    <form action="{{ url_for('proveedores.import_proveedores_excel') }}" method="POST" enctype="multipart/form-data" id="importProvForm" style="display:none">
+      <input type="file" name="file" accept=".xlsx,.xls" onchange="document.getElementById('importProvForm').submit()">
+    </form>
+  </label>
+  <button class="btn btn-primary btn-sm" onclick="openModal('modalNuevoProv')">
+    <i class="fas fa-plus"></i> Nuevo Proveedor
+  </button>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Buscador -->
+<form method="GET" action="{{ url_for('proveedores.proveedores') }}" class="flex gap-1 mb-2">
+  <div style="position:relative;flex:1;max-width:360px">
+    <i class="fas fa-search" style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.85rem"></i>
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar proveedor..." class="form-control" style="padding-left:2.2rem">
+  </div>
+  <button type="submit" class="btn btn-outline btn-sm">Buscar</button>
+  {% if q %}<a href="{{ url_for('proveedores.proveedores') }}" class="btn btn-outline btn-sm">Limpiar</a>{% endif %}
+</form>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>Nombre</th>
+            <th>Contacto</th>
+            <th>Email</th>
+            <th>Teléfono</th>
+            <th>CUIT</th>
+            {% if current_user.can_edit() %}<th style="width:110px;text-align:center">Acciones</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in proveedores %}
+          <tr>
+            <td class="text-muted mono" style="font-size:.8rem">{{ p.id }}</td>
+            <td>
+              <div class="fw-600">{{ p.name }}</div>
+              {% if p.website %}
+              <div style="font-size:.75rem">
+                <a href="{{ p.website if p.website.startswith('http') else 'https://' + p.website }}"
+                   target="_blank" class="text-muted" style="text-decoration:none">
+                  <i class="fas fa-globe" style="font-size:.7rem"></i> {{ p.website }}
+                </a>
+              </div>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ p.contact_name or '—' }}</td>
+            <td>
+              {% if p.email %}
+              <a href="mailto:{{ p.email }}" style="color:var(--brand);text-decoration:none;font-size:.85rem">{{ p.email }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-muted">{{ p.phone or '—' }}</td>
+            <td>
+              {% if p.cuit %}
+              <span class="mono" style="font-size:.85rem">{{ p.cuit }}</span>
+              {% else %}—{% endif %}
+            </td>
+            {% if current_user.can_edit() %}
+            <td style="text-align:center">
+              <div class="flex gap-1" style="justify-content:center">
+                <button class="btn btn-outline btn-icon btn-sm" title="Editar"
+                  onclick="openEditProv(
+                    {{ p.id }},
+                    {{ p.name|tojson }},
+                    {{ (p.contact_name or '')|tojson }},
+                    {{ (p.email or '')|tojson }},
+                    {{ (p.phone or '')|tojson }},
+                    {{ (p.address or '')|tojson }},
+                    {{ (p.cuit or '')|tojson }},
+                    {{ (p.website or '')|tojson }},
+                    {{ (p.notes or '')|tojson }}
+                  )">
+                  <i class="fas fa-pencil"></i>
+                </button>
+                {% if current_user.is_admin() %}
+                <button class="btn btn-danger btn-icon btn-sm" title="Eliminar"
+                  onclick="openDeleteProv({{ p.id }}, {{ p.name|tojson }})">
+                  <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+              <i class="fas fa-truck" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem"></i>
+              {% if q %}
+                No se encontraron proveedores para "{{ q }}".
+              {% else %}
+                No hay proveedores. <a href="#" onclick="openModal('modalNuevoProv')">Agregá el primero</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO PROVEEDOR -->
+<div class="modal-backdrop" id="modalNuevoProv">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-truck" style="color:var(--brand)"></i> Nuevo Proveedor</span>
+      <button class="modal-close" onclick="closeModal('modalNuevoProv')"><i class="fas fa-times"></i></button>
+    </div>
+    <form action="{{ url_for('proveedores.new_proveedor') }}" method="POST">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input type="text" name="name" class="form-control" placeholder="Razón social o nombre comercial" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Contacto</label>
+            <input type="text" name="contact_name" class="form-control" placeholder="Nombre del contacto">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CUIT</label>
+            <input type="text" name="cuit" class="form-control" placeholder="20-12345678-3">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" placeholder="correo@proveedor.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="phone" class="form-control" placeholder="+54 11 1234-5678">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dirección</label>
+          <input type="text" name="address" class="form-control" placeholder="Calle, número, ciudad">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sitio Web</label>
+          <input type="text" name="website" class="form-control" placeholder="www.proveedor.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notas</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Observaciones, condiciones comerciales..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalNuevoProv')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PROVEEDOR -->
+<div class="modal-backdrop" id="modalEditarProv">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-pencil" style="color:var(--brand)"></i> Editar Proveedor</span>
+      <button class="modal-close" onclick="closeModal('modalEditarProv')"><i class="fas fa-times"></i></button>
+    </div>
+    <form id="formEditarProv" method="POST">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input type="text" name="name" id="epName" class="form-control" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Contacto</label>
+            <input type="text" name="contact_name" id="epContact" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CUIT</label>
+            <input type="text" name="cuit" id="epCuit" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" id="epEmail" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="phone" id="epPhone" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dirección</label>
+          <input type="text" name="address" id="epAddress" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sitio Web</label>
+          <input type="text" name="website" id="epWebsite" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notas</label>
+          <textarea name="notes" id="epNotes" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalEditarProv')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR PROVEEDOR -->
+<div class="modal-backdrop" id="modalEliminarProv">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)"><i class="fas fa-trash"></i> Eliminar Proveedor</span>
+      <button class="modal-close" onclick="closeModal('modalEliminarProv')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>¿Confirmás que querés eliminar a <strong id="deleteProvName"></strong>?</p>
+      <p class="text-muted" style="font-size:.85rem;margin-top:.5rem">El proveedor se desactivará y no aparecerá en los listados.</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modalEliminarProv')">Cancelar</button>
+      <form id="formEliminarProv" method="POST" style="display:inline">
+        <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+  });
+
+  function openEditProv(id, name, contact, email, phone, address, cuit, website, notes) {
+    document.getElementById('formEditarProv').action = '/proveedores/' + id + '/editar';
+    document.getElementById('epName').value    = name;
+    document.getElementById('epContact').value = contact;
+    document.getElementById('epEmail').value   = email;
+    document.getElementById('epPhone').value   = phone;
+    document.getElementById('epAddress').value = address;
+    document.getElementById('epCuit').value    = cuit;
+    document.getElementById('epWebsite').value = website;
+    document.getElementById('epNotes').value   = notes;
+    openModal('modalEditarProv');
+  }
+
+  function openDeleteProv(id, name) {
+    document.getElementById('formEliminarProv').action = '/proveedores/' + id + '/eliminar';
+    document.getElementById('deleteProvName').textContent = name;
+    openModal('modalEliminarProv');
+  }
+</script>
+{% endblock %}

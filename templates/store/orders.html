@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Pedidos — Kairos Stock{% endblock %}
+{% block page_title %}Pedidos de la Tienda{% endblock %}
+{% block page_subtitle %}Todos los pedidos recibidos online{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('store.store_admin') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Volver</a>
+  <a href="{{ url_for('store.export_orders_excel') }}" class="btn btn-success"><i class="fas fa-file-excel"></i> Exportar Excel</a>
+  <a href="{{ url_for('store.store') }}" class="btn btn-outline" target="_blank"><i class="fas fa-store"></i> Ver tienda</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+  .status-badge { display:inline-block; padding:.25rem .6rem; border-radius:6px; font-size:.72rem; font-weight:700; text-transform:capitalize; }
+  .s-nuevo { background:#fef3c7; color:#92400e; }
+  .s-en-proceso { background:#dbeafe; color:#1d4ed8; }
+  .s-confirmado { background:#d1fae5; color:#065f46; }
+  .s-enviado { background:#ede9fe; color:#5b21b6; }
+  .s-cancelado { background:#fee2e2; color:#b91c1c; }
+  .order-row td { vertical-align:middle; }
+  .filter-bar { display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center; }
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.25rem">
+  {% set statuses = [('nuevo','#f59e0b'),('en proceso','#3b82f6'),('confirmado','#10b981'),('enviado','#8b5cf6'),('cancelado','#ef4444')] %}
+  {% for s, color in statuses %}
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:.85rem;text-align:center">
+    <div style="font-size:1.4rem;font-weight:800;color:{{ color }}">{{ orders|selectattr('status','eq',s)|list|length }}</div>
+    <div style="font-size:.72rem;color:var(--text-muted);text-transform:capitalize">{{ s }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <input type="text" id="searchInput" class="form-control" style="max-width:240px" placeholder="🔍 Buscar cliente o N° pedido..." oninput="filterOrders()">
+  <select id="statusFilter" class="form-control" style="max-width:180px" onchange="filterOrders()">
+    <option value="">Todos los estados</option>
+    <option>nuevo</option><option>en proceso</option><option>confirmado</option><option>enviado</option><option>cancelado</option>
+  </select>
+  <span id="countLabel" style="font-size:.8rem;color:var(--text-muted);margin-left:.25rem"></span>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table id="ordersTable">
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Contacto</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr class="order-row" data-status="{{ o.status }}" data-search="{{ o.order_number|lower }} {{ o.client_name|lower }}">
+          <td class="mono fw-600" style="color:var(--brand)">{{ o.order_number }}</td>
+          <td class="text-muted" style="font-size:.78rem;white-space:nowrap">{{ o.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            <div style="font-weight:600">{{ o.client_name }}</div>
+            {% if o.client_address %}<div style="font-size:.72rem;color:var(--text-muted)">{{ o.client_address }}</div>{% endif %}
+          </td>
+          <td style="font-size:.8rem">
+            {% if o.client_phone %}<div>📱 {{ o.client_phone }}</div>{% endif %}
+            {% if o.client_email %}<div style="color:var(--text-muted)">✉️ {{ o.client_email }}</div>{% endif %}
+          </td>
+          <td style="font-size:.78rem;color:var(--text-muted)">{{ o.items|length }} producto{% if o.items|length != 1 %}s{% endif %}</td>
+          <td class="mono fw-600">${{ "%.2f"|format(o.total) }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('store.update_order_status', id=o.id) }}" style="display:flex;gap:.3rem">
+              <select name="status" class="form-control" style="font-size:.75rem;padding:.3rem .5rem;min-width:110px">
+                {% for s in ['nuevo','en proceso','confirmado','enviado','cancelado'] %}
+                <option value="{{ s }}" {% if o.status==s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-sm btn-primary" title="Actualizar estado"><i class="fas fa-check"></i></button>
+            </form>
+          </td>
+          <td>
+            <a href="{{ url_for('store.order_detail', id=o.id) }}" class="btn btn-sm btn-outline" title="Ver detalle">
+              <i class="fas fa-eye"></i>
+            </a>
+            {% if o.client_phone %}
+            <a href="https://wa.me/{{ o.client_phone.replace('+','').replace(' ','') }}?text=Hola+{{ o.client_name }}%2C+tu+pedido+{{ o.order_number }}+fue+actualizado."
+               target="_blank" class="btn btn-sm btn-success" title="Contactar por WhatsApp" style="margin-left:.25rem">
+              <i class="fab fa-whatsapp"></i>
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted)">
+          <i class="fas fa-shopping-cart" style="font-size:2rem;opacity:.25;display:block;margin-bottom:.5rem"></i>
+          Aún no hay pedidos
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  function filterOrders() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const s = document.getElementById('statusFilter').value;
+    let visible = 0;
+    document.querySelectorAll('.order-row').forEach(row => {
+      const matchSearch = !q || row.dataset.search.includes(q);
+      const matchStatus = !s || row.dataset.status === s;
+      const show = matchSearch && matchStatus;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    document.getElementById('countLabel').textContent = `${visible} pedido${visible !== 1 ? 's' : ''}`;
+  }
+  filterOrders();
+</script>
+{% endblock %}
