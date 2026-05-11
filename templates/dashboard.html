@@ -4,9 +4,6 @@
 {% block header %}Dashboard{% endblock %}
 
 {% block content %}
-
-{% set utcnow = namespace(now=none) %}
-
 <div class="card" style="background:linear-gradient(135deg,#1e293b,#0f172a);border-color:#334155;margin-bottom:24px;padding:32px">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
     <div>
@@ -24,47 +21,47 @@
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px">
   <div class="stat-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="color:#64748b;font-size:13px;font-weight:500">Productos</span>
-      <div style="width:40px;height:40px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;color:#4f46e5"><i class="fas fa-box"></i></div>
+      <span style="color:var(--text-muted);font-size:13px;font-weight:500">Productos</span>
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--brand-bg);display:flex;align-items:center;justify-content:center;color:var(--brand)"><i class="fas fa-box"></i></div>
     </div>
-    <div style="font-size:28px;font-weight:700;color:#0f172a">{{ total_products }}</div>
+    <div style="font-size:28px;font-weight:700;color:var(--text)">{{ total_products }}</div>
   </div>
   <div class="stat-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="color:#64748b;font-size:13px;font-weight:500">Categorías</span>
+      <span style="color:var(--text-muted);font-size:13px;font-weight:500">Categorías</span>
       <div style="width:40px;height:40px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;color:#d97706"><i class="fas fa-tags"></i></div>
     </div>
-    <div style="font-size:28px;font-weight:700;color:#0f172a">{{ total_categories }}</div>
+    <div style="font-size:28px;font-weight:700;color:var(--text)">{{ total_categories }}</div>
   </div>
   <div class="stat-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="color:#64748b;font-size:13px;font-weight:500">Stock Bajo</span>
-      <div style="width:40px;height:40px;border-radius:10px;background:#fef2f2;display:flex;align-items:center;justify-content:center;color:#dc2626"><i class="fas fa-exclamation-triangle"></i></div>
+      <span style="color:var(--text-muted);font-size:13px;font-weight:500">Stock Bajo</span>
+      <div style="width:40px;height:40px;border-radius:10px;background:#fef2f2;display:flex;align-items:center;justify-content:center;color:var(--danger)"><i class="fas fa-exclamation-triangle"></i></div>
     </div>
-    <div style="font-size:28px;font-weight:700;color:#0f172a">{{ low_stock_products|length }}</div>
+    <div style="font-size:28px;font-weight:700;color:var(--text)">{{ low_stock_products|length }}</div>
   </div>
   <div class="stat-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="color:#64748b;font-size:13px;font-weight:500">Valor en Stock</span>
-      <div style="width:40px;height:40px;border-radius:10px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;color:#10b981"><i class="fas fa-dollar-sign"></i></div>
+      <span style="color:var(--text-muted);font-size:13px;font-weight:500">Valor en Stock</span>
+      <div style="width:40px;height:40px;border-radius:10px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;color:var(--success)"><i class="fas fa-dollar-sign"></i></div>
     </div>
-    <div style="font-size:28px;font-weight:700;color:#0f172a">${{ "%.2f"|format(total_stock_value) }}</div>
+    <div style="font-size:28px;font-weight:700;color:var(--text)">${{ "%.2f"|format(total_stock_value) }}</div>
   </div>
 </div>
 
 {% if low_stock_products %}
-<div class="card" style="border-left:4px solid #ef4444;margin-bottom:24px">
-  <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:16px;display:flex;align-items:center;gap:8px"><i class="fas fa-exclamation-circle" style="color:#ef4444"></i> Productos con stock bajo</h3>
+<div class="card" style="border-left:4px solid var(--danger);margin-bottom:24px">
+  <h3 style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px"><i class="fas fa-exclamation-circle" style="color:var(--danger)"></i> Productos con stock bajo</h3>
   <div style="display:grid;gap:10px">
     {% for p in low_stock_products %}
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fef2f2;border-radius:8px">
       <div>
         <span style="font-weight:600;font-size:14px;color:#991b1b">{{ p.name }}</span>
-        <span style="color:#64748b;font-size:13px;margin-left:8px">{{ p.sku }}</span>
+        <span style="color:var(--text-muted);font-size:13px;margin-left:8px">{{ p.sku }}</span>
       </div>
       <div style="text-align:right">
-        <span style="font-weight:700;font-size:14px;color:#dc2626">{{ p.stock }} / {{ p.min_stock }}</span>
-        <span style="color:#64748b;font-size:12px;margin-left:6px">{{ p.unit }}</span>
+        <span style="font-weight:700;font-size:14px;color:var(--danger)">{{ p.stock }} / {{ p.min_stock }}</span>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:6px">{{ p.unit }}</span>
       </div>
     </div>
     {% endfor %}
@@ -74,66 +71,71 @@
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
   <div class="card">
-    <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:16px"><i class="fas fa-chart-doughnut" style="color:#6366f1;margin-right:8px"></i> Stock por Categoría</h3>
-    <canvas id="catChart" height="250"></canvas>
-    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
-      {% for c in cat_data|safe if c is mapping %}
-      {% else %}
-      {% for c in categories %}
-      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b"><span style="width:10px;height:10px;border-radius:3px;background:{{ c.color }}"></span> {{ c.name }}</span>
-      {% endfor %}
-      {% endif %}
+    <div class="card-header">
+      <span class="card-title"><i class="fas fa-chart-doughnut" style="color:var(--brand)"></i> Stock por Categoría</span>
+    </div>
+    <div class="card-body">
+      <canvas id="catChart" height="220"></canvas>
+      <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
+        {% for c in categories %}
+        <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)"><span style="width:10px;height:10px;border-radius:3px;background:{{ c.color }}"></span> {{ c.name }}</span>
+        {% endfor %}
+      </div>
     </div>
   </div>
   <div class="card">
-    <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <span><i class="fas fa-exchange-alt" style="color:#10b981;margin-right:8px"></i> Últimos Movimientos</span>
+    <div class="card-header">
+      <span class="card-title"><i class="fas fa-exchange-alt" style="color:var(--success)"></i> Últimos Movimientos</span>
       <a href="{{ url_for('inventory.movements') }}" class="btn btn-secondary btn-xs">Ver todos</a>
-    </h3>
-    {% if recent_movements %}
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if recent_movements %}
+      <table>
+        <thead><tr><th>Producto</th><th>Tipo</th><th>Cant</th><th>Fecha</th></tr></thead>
+        <tbody>
+          {% for m in recent_movements %}
+          <tr>
+            <td>{{ m.product.name if m.product else '—' }}</td>
+            <td><span class="badge" style="background:{% if m.movement_type == 'entrada' %}#ecfdf5;color:#059669{% elif m.movement_type == 'salida' %}#fef2f2;color:var(--danger){% else %}#fef3c7;color:#d97706{% endif %}">{{ m.movement_type|capitalize }}</span></td>
+            <td style="font-weight:600">{{ '+' if m.movement_type == 'entrada' else '' }}{{ m.quantity }}</td>
+            <td style="color:#94a3b8;font-size:13px">{{ m.created_at.strftime('%d/%m %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state"><i class="fas fa-exchange-alt"></i><p>No hay movimientos todavía</p></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:24px">
+  <div class="card-header">
+    <span class="card-title"><i class="fas fa-file-invoice" style="color:var(--warning)"></i> Últimos Presupuestos</span>
+    <a href="{{ url_for('budgets.budgets') }}" class="btn btn-secondary btn-xs">Ver todos</a>
+  </div>
+  <div class="card-body" style="padding:0">
+    {% if recent_budgets %}
     <table>
-      <thead><tr><th>Producto</th><th>Tipo</th><th>Cant</th><th>Fecha</th></tr></thead>
+      <thead><tr><th>N°</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
       <tbody>
-        {% for m in recent_movements %}
+        {% for b in recent_budgets %}
         <tr>
-          <td>{{ m.product.name if m.product else '—' }}</td>
-          <td><span class="badge" style="background:{% if m.movement_type == 'entrada' %}#ecfdf5;color:#059669{% elif m.movement_type == 'salida' %}#fef2f2;color:#dc2626{% else %}#fef3c7;color:#d97706{% endif %}">{{ m.movement_type|capitalize }}</span></td>
-          <td style="font-weight:600">{{ '+' if m.movement_type == 'entrada' else '' }}{{ m.quantity }}</td>
-          <td style="color:#94a3b8;font-size:13px">{{ m.created_at.strftime('%d/%m %H:%M') }}</td>
+          <td style="font-weight:600">{{ b.budget_number }}</td>
+          <td>{{ b.client_name }}</td>
+          <td style="font-weight:600">${{ "%.2f"|format(b.total) }}</td>
+          <td><span class="badge" style="background:{% if b.status == 'aprobado' %}#ecfdf5;color:#059669{% elif b.status == 'rechazado' %}#fef2f2;color:var(--danger){% elif b.status == 'enviado' %}#eef2ff;color:#4f46e5{% else %}#f1f5f9;color:#64748b{% endif %}">{{ b.status|capitalize }}</span></td>
+          <td style="color:#94a3b8;font-size:13px">{{ b.created_at.strftime('%d/%m/%Y') }}</td>
+          <td><a href="{{ url_for('budgets.budget_view', id=b.id) }}" style="color:var(--brand);font-size:13px"><i class="fas fa-eye"></i></a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    <div class="empty-state"><i class="fas fa-exchange-alt"></i><p>No hay movimientos todavía</p></div>
+    <div class="empty-state"><i class="fas fa-file-invoice"></i><p>No hay presupuestos todavía</p></div>
     {% endif %}
   </div>
-</div>
-
-<div class="card" style="margin-top:24px">
-  <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-    <span><i class="fas fa-file-invoice" style="color:#f59e0b;margin-right:8px"></i> Últimos Presupuestos</span>
-    <a href="{{ url_for('budgets.budgets') }}" class="btn btn-secondary btn-xs">Ver todos</a>
-  </h3>
-  {% if recent_budgets %}
-  <table>
-    <thead><tr><th>N°</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
-    <tbody>
-      {% for b in recent_budgets %}
-      <tr>
-        <td style="font-weight:600">{{ b.budget_number }}</td>
-        <td>{{ b.client_name }}</td>
-        <td style="font-weight:600">${{ "%.2f"|format(b.total) }}</td>
-        <td><span class="badge" style="background:{% if b.status == 'aprobado' %}#ecfdf5;color:#059669{% elif b.status == 'rechazado' %}#fef2f2;color:#dc2626{% elif b.status == 'enviado' %}#eef2ff;color:#4f46e5{% else %}#f1f5f9;color:#64748b{% endif %}">{{ b.status|capitalize }}</span></td>
-        <td style="color:#94a3b8;font-size:13px">{{ b.created_at.strftime('%d/%m/%Y') }}</td>
-        <td><a href="{{ url_for('budgets.budget_view', id=b.id) }}" style="color:#6366f1;font-size:13px"><i class="fas fa-eye"></i></a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty-state"><i class="fas fa-file-invoice"></i><p>No hay presupuestos todavía</p></div>
-  {% endif %}
 </div>
 
 {% endblock %}

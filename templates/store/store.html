@@ -244,7 +244,7 @@
         </div>
         <button type="submit" class="apply-btn">Aplicar filtro</button>
         {% if min_price or max_price or cat_id %}
-        <a href="{{ url_for('store', q=q) }}" class="clear-btn" style="display:block;text-align:center;text-decoration:none;margin-top:.4rem">Limpiar filtros</a>
+        <a href="{{ url_for('store.store', q=q) }}" class="clear-btn" style="display:block;text-align:center;text-decoration:none;margin-top:.4rem">Limpiar filtros</a>
         {% endif %}
       </div>
 
@@ -413,7 +413,7 @@
     <div>
       <div class="footer-title">Categorías</div>
       {% for c in categories[:6] %}
-      <a href="{{ url_for('store', cat=c.id) }}" class="footer-link">{{ c.name }}</a>
+      <a href="{{ url_for('store.store', cat=c.id) }}" class="footer-link">{{ c.name }}</a>
       {% endfor %}
     </div>
     <div>
